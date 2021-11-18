@@ -17,7 +17,7 @@ public class TestApp {
             case "Get" -> {
                 SubRemoteInterface server;
                 server = (SubRemoteInterface) Naming.lookup("//" + accessPoint);
-                System.out.println(server.Get());
+                System.out.println(server.Get(args[2]));
             }
             case "Put" -> {
                 PubRemoteInterface server;
@@ -26,8 +26,8 @@ public class TestApp {
             }
             case "Subscribe" -> {
                 SubRemoteInterface server;
-                server = (SubRemoteInterface) Naming.lookup("//" +accessPoint);
-                System.out.println(server.Subscribe());
+                server = (SubRemoteInterface) Naming.lookup(accessPoint);
+                System.out.println(server.Subscribe(args[2]));
             }
             case "Unsubscribe" -> {
                 SubRemoteInterface server;

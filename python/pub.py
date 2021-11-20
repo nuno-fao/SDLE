@@ -22,4 +22,6 @@ def put(topic, message):
     response = socket.recv()
     print(response)
 
-put("TESTE", zhelpers.generate_random_message()) #
+put("TESTE", zhelpers.generate_random_message()) 
+put("TESTE", zhelpers.generate_random_message()) 
+put("TESTE2", zhelpers.generate_random_message()) 

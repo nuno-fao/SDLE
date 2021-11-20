@@ -21,7 +21,7 @@ client.bind("tcp://*:5672")
 
 topics_messages = {} # {topic1: [message1, message2]}
 subscribed_clients = {} # {client_1: }
-sequence_number = 0
+sequence_number = {}
 
 message_list = []
 # [(topic1, msg1, seq1), (topic2, msg2, seq2), (topic1, msg3, seq3)]
@@ -41,18 +41,22 @@ def garbage_collect():
     global topics_messages
     while True:
         # print(sorted(message_list, key = lambda x: (x[0], x[2])))
-        print(clients_idx)
+        print(clients_idx,message_list)
         time.sleep(5)
 
 
 def insert_message(topic, message, address): #inserts message in topic
     global sequence_number
-    message_list.append((topic, message, sequence_number))
+
+    if topic not in sequence_number:
+        sequence_number[topic] = 0
+    else:
+        sequence_number[topic] += 1
+    message_list.append((topic, message, sequence_number[topic]))
     # if address not in clients_idx.keys():
     #     clients_idx[address] = {topic: 0}
     # else:
     #     clients_idx[address][topic] = 0
-    sequence_number += 1
 
 
 def retrieve_message(topic, address):
@@ -74,11 +78,11 @@ def retrieve_message(topic, address):
 
 def subscribe_topic(topic, address):
     if address not in clients_idx.keys():
-        clients_idx[address] = {topic: 0}
+        clients_idx[address] = {topic : sequence_number[topic] + 1} 
         return b"Subscribe to topic."
     elif topic not in clients_idx[address]:
-        clients_idx[address][topic]=0 #ACHO QUE ISTO TEM DE MUDAR PARA O ID DE MENSAGEM MAIS RECENTE
-        return b"Subscribe to topic."
+        clients_idx[address][topic] = sequence_number[topic] + 1
+        return b"Resubscribe to topic."
     else:
         return b"Already subscribed to topic."
 

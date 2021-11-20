@@ -31,7 +31,7 @@ def get(topic, ID):
     print(response)
 
 #subscribe("TESTE",1)
-#get("TESTE", 1)
+get("TESTE", 1)
 #get("TESTE", 1)
 #unsubscribe("TESTE",1)
 #subscribe("TESTE",1)

@@ -41,6 +41,7 @@ def garbage_collect():
     global topics_messages
     while True:
         # print(sorted(message_list, key = lambda x: (x[0], x[2])))
+        clean_messages()
         print(clients_idx,message_list)
         time.sleep(5)
 
@@ -59,24 +60,35 @@ def insert_message(topic, message, address): #inserts message in topic
     #     clients_idx[address][topic] = 0
 
 
+def determine_unreceived(x,topic,idx):
+    if x[0]==topic and x[2]>=idx:
+        return True
+    else:
+        return False
+
+
 def retrieve_message(topic, address):
     global clients_idx
     if address not in clients_idx.keys() or topic not in clients_idx[address].keys():
         return b"Invalid. Client is not subscribed to the topic."
     sorted_messages = sorted(message_list, key = lambda x: (x[0], x[2]))
-    topic_messages = [x for x in sorted_messages if x[0] == topic] #possible messages from the required topic
     idx = clients_idx[address][topic]
-    if idx >= len(topic_messages):
+    topic_messages = [x for x in sorted_messages if determine_unreceived(x,topic,idx)] #possible messages from the required topic
+    
+    if len(topic_messages) < 1:
         return b"All messages were read from this topic"
-    message = topic_messages[idx][1].encode()
+
+    message = topic_messages[0][1].encode()
     # clients_idx[address].update(topic = idx + 1)
-    clients_idx[address][topic] = idx + 1
+    clients_idx[address][topic]+=1
     return message
 
 
 
 
 def subscribe_topic(topic, address):
+    if topic not in sequence_number:
+        sequence_number[topic] = 0
     if address not in clients_idx.keys():
         clients_idx[address] = {topic : sequence_number[topic] + 1} 
         return b"Subscribe to topic."
@@ -109,6 +121,31 @@ def handle_REQ(request, address = None):
 
     return "response to request".encode()
 
+def determine_delivered(oldest_subs,x):
+    (topic1, _, seq1) = x
+    if topic1 not in oldest_subs:
+        return False
+    elif oldest_subs[topic1] > seq1:
+        return False
+    else:
+        return True
+
+
+def clean_messages():
+
+    global clients_idx
+    global message_list
+
+    oldest_subs={}
+    for client in clients_idx:
+        for topic,index in clients_idx[client].items():
+            if topic not in oldest_subs:
+                oldest_subs[topic] = index
+            elif oldest_subs[topic] > index:
+                oldest_subs[topic] = index
+
+    message_list[:] = [x for x in message_list if determine_delivered(oldest_subs,x)]
+
 
 gc = Thread(target=garbage_collect).start()
 
@@ -127,6 +164,7 @@ while True:
         print(address, empty, message)
         response = handle_REQ(message, address.decode('utf8'))
         publisher.send_multipart([address, empty, response])
+
 
 
 publisher.close()

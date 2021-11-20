@@ -30,6 +30,8 @@ def get(topic, ID):
     response = socket.recv()
     print(response)
 
-unsubscribe("TESTE", 1)
-
+subscribe("TESTE",1)
+unsubscribe("TESTE",1)
+subscribe("TESTE",1)
 get("TESTE", 1)
+

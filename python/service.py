@@ -76,6 +76,9 @@ def subscribe_topic(topic, address):
     if address not in clients_idx.keys():
         clients_idx[address] = {topic: 0}
         return b"Subscribe to topic."
+    elif topic not in clients_idx[address]:
+        clients_idx[address][topic]=0 #ACHO QUE ISTO TEM DE MUDAR PARA O ID DE MENSAGEM MAIS RECENTE
+        return b"Subscribe to topic."
     else:
         return b"Already subscribed to topic."
 
@@ -111,11 +114,13 @@ while True:
 
     if socks.get(client) == zmq.POLLIN:
         address, empty, message = client.recv_multipart()
+        print(address, empty, message)
         response = handle_REQ(message, address.decode('utf8'))
         client.send_multipart([address, empty, response])
 
     if socks.get(publisher) == zmq.POLLIN:
         address, empty, message = publisher.recv_multipart()
+        print(address, empty, message)
         response = handle_REQ(message, address.decode('utf8'))
         publisher.send_multipart([address, empty, response])
 

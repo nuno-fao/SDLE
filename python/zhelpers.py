@@ -9,8 +9,10 @@ import os
 import random
 import string
 # from random import randint
-
 import zmq
+
+context = zmq.Context.instance()
+
 
 def socket_set_hwm(socket, hwm=-1):
     """libzmq 2/3/4 compatible sethwm"""
@@ -19,6 +21,22 @@ def socket_set_hwm(socket, hwm=-1):
     except AttributeError:
         socket.hwm = hwm
 
+def start_ACK_socket(address):
+    # context = zmq.Context().instance()
+    socket = context.socket(zmq.PULL)
+    # identity = "Service"
+    # socket.setsockopt_string(zmq.IDENTITY, identity)
+    socket.connect(address)
+    return socket
+
+
+def start(ID, address):
+    # context = zmq.Context().instance()
+    socket = context.socket(zmq.REQ)
+    identity = "Client_" + str(ID)
+    socket.setsockopt_string(zmq.IDENTITY, identity)
+    socket.connect(address)
+    return socket
 
 def dump(msg_or_socket):
     """Receives all message parts from socket, printing each frame neatly"""
@@ -61,3 +79,9 @@ def generate_random_message():
     digits = "".join( [random.choice(string.digits) for i in range(15)] )
     chars = "".join( [random.choice(string.ascii_letters) for i in range(5)] )
     return digits + chars
+
+def get_address(id):
+    # generate pseudo random port no for a client
+    ID = int(id.split("_")[1])
+    random.seed(ID)
+    return random.randint(5000, 9000)

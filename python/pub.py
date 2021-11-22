@@ -20,6 +20,6 @@ def put(topic, message):
     socket = start()
     socket.send("PUT {topic} {message}".format(topic=topic, message=message).encode())
     response = socket.recv()
-    print(response)
+    #print("Successfully published message: " + message)
 
-put("TESTE", zhelpers.generate_random_message()) 
+#put("TESTE", zhelpers.generate_random_message()) 

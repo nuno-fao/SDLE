@@ -166,6 +166,22 @@ def clean_messages():
     for key in toRemoveKeys:
         clients_idx.pop(key)
 
+def ack_message(client, address, empty, response, socket):
+    tries = 3
+    count = 1
+    while count <= 3:
+        try:
+            socket.recv() #socket times out after 1 second
+            print ("Received ACK")
+            break
+        except:
+            print("Timeout occured: Server is handling ...")
+            time.sleep(2)
+            client.send_multipart([address, empty, response])
+    socket.close()
+        
+
+
 
 gc = Thread(target=garbage_collect)
 gc.daemon = True  # allows us to kill the process on ctrl+c
@@ -185,16 +201,20 @@ while True:
         # print("Port: " , port)
         if message.decode('utf8').split(" ")[0] == "GET":
             pull_socket.RCVTIMEO = 2000
-            try:
-                pull_socket.recv() #socket times out after 1 second
-                print ("Received ACK")
-                pull_socket.close()
-            except:
-                topic = message.decode('utf8').split(" ")[1]
-                # rollback_message(topic, address.decode("utf8"))
-                print("Timeout occured: Server is handling ...")
-                # sequence_number, message_list, clients_idx = previous_sn, previous_ml, previous_ci
-                pull_socket.close()
+            ack_thread = Thread(target=ack_message, args=(client, address, empty, response, pull_socket,))
+            ack_thread.daemon = True
+            ack_thread.start()
+            # pull_socket.RCVTIMEO = 2000
+            # try:
+            #     pull_socket.recv() #socket times out after 1 second
+            #     print ("Received ACK")
+            #     pull_socket.close()
+            # except:
+            #     topic = message.decode('utf8').split(" ")[1]
+            #     #rollback_message(topic, address.decode("utf8"))
+            #     print("Timeout occured: Server is handling ...")
+            #     # sequence_number, message_list, clients_idx = previous_sn, previous_ml, previous_ci
+            #     pull_socket.close()
     
 
     if socks.get(publisher) == zmq.POLLIN:

@@ -37,6 +37,7 @@ def get(topic, ID):
     client_ACK.bind("tcp://*:" + str(port))
 
     # Comment the next 2 lines to simulate crash on client
+    #time.sleep(10) sleep to simulate a delay receiving an ACK
     client_ACK.send(b"ACK") 
     client_ACK.close()
     

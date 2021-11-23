@@ -22,4 +22,4 @@ def put(topic, message):
     response = socket.recv()
     #print("Successfully published message: " + message)
 
-#put("TESTE", zhelpers.generate_random_message()) 
+put("TESTE", zhelpers.generate_random_message()) 

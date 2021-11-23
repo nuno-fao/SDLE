@@ -62,3 +62,4 @@ def get(topic, ID):
     
     #TODO: close client_ACK socket (?)
 
+subscribe("TESTE",1)

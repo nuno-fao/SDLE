@@ -5,6 +5,7 @@ import time
 import random
 from threading import Thread
 from zhelpers import context
+import json
 
 import zmq
 import zhelpers
@@ -41,7 +42,7 @@ poller.register(client, zmq.POLLIN)
 def garbage_collect():
     while True:
         clean_messages()
-        print(clients_idx,message_list)
+        print(clients_idx,message_list,sequence_number)
         time.sleep(5)
 
 def check_subscribers(topic):
@@ -186,14 +187,41 @@ def ack_message(client, address, response, socket, topic):
         rollback_message(topic, address.decode("utf8"))
 
         
+def save_changes():
+    global sequence_number
+    global message_list
+    global clients_idx
+    dict_to_save = {
+        "sequence_numbers": sequence_number,
+        "messages":message_list,
+        "clients":clients_idx
+    }
+    out_file = open("server_state.json", "w")
+    json.dump(dict_to_save,out_file)
+    out_file.close()
 
+def load_state():
+    global sequence_number
+    global message_list
+    global clients_idx
 
+    f = open('server_state.json')
+    data = json.load(f)
 
+    sequence_number = data["sequence_numbers"]
+    clients_idx=data["clients"]
+    for x,y,z in data["messages"]:
+        message_list.append((x,y,z))
+
+load_state()
 gc = Thread(target=garbage_collect)
 gc.daemon = True  # allows us to kill the process on ctrl+c
 gc.start()
 
+
+
 while True:
+    rewrite = False
     socks = dict(poller.poll())
 
     if socks.get(client) == zmq.POLLIN:
@@ -209,12 +237,17 @@ while True:
             ack_thread = Thread(target=ack_message, args=(client, address, response, pull_socket, message.decode('utf8').split(" ")[1]))
             ack_thread.daemon = True
             ack_thread.start()
+        rewrite = True
     
 
     if socks.get(publisher) == zmq.POLLIN:
         address, empty, message = publisher.recv_multipart()
         response = handle_REQ(message, address.decode('utf8'))
         publisher.send_multipart([address, empty, response])
+        rewrite = True
+
+    if rewrite:
+        save_changes()
 
 
 publisher.close()

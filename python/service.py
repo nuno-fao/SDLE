@@ -166,19 +166,25 @@ def clean_messages():
     for key in toRemoveKeys:
         clients_idx.pop(key)
 
-def ack_message(client, address, empty, response, socket):
-    tries = 3
+def ack_message(client, address, response, socket, topic):
+    tries = 5
     count = 1
-    while count <= 3:
+    pull_socket.RCVTIMEO = 2000
+    while count <= tries:
         try:
-            socket.recv() #socket times out after 1 second
+            socket.recv() #socket times out after 2 seconds
             print ("Received ACK")
             break
         except:
             print("Timeout occured: Server is handling ...")
             time.sleep(2)
-            client.send_multipart([address, empty, response])
+            client.send_multipart([address, b"", response])
+        count += 1
     socket.close()
+    if count > tries:
+        print(address.decode("utf8") + " could not recover. Message will be rolled back.")
+        rollback_message(topic, address.decode("utf8"))
+
         
 
 
@@ -194,27 +200,15 @@ while True:
         previous_sn, previous_ml, previous_ci = sequence_number, message_list, clients_idx
         address, empty, message = client.recv_multipart()
         response = handle_REQ(message, address.decode('utf8'))
-        # print("Sending response: " + response.decode('utf8'))
-        client.send_multipart([address, empty, response])
+        client.send_multipart([address, empty, response], zmq.DONTWAIT) 
         port = zhelpers.get_address(address.decode("utf8"))
         pull_socket = zhelpers.start_ACK_socket("tcp://127.0.0.1:" + str(port))
-        # print("Port: " , port)
+        
         if message.decode('utf8').split(" ")[0] == "GET":
-            pull_socket.RCVTIMEO = 2000
-            ack_thread = Thread(target=ack_message, args=(client, address, empty, response, pull_socket,))
+            
+            ack_thread = Thread(target=ack_message, args=(client, address, response, pull_socket, message.decode('utf8').split(" ")[1]))
             ack_thread.daemon = True
             ack_thread.start()
-            # pull_socket.RCVTIMEO = 2000
-            # try:
-            #     pull_socket.recv() #socket times out after 1 second
-            #     print ("Received ACK")
-            #     pull_socket.close()
-            # except:
-            #     topic = message.decode('utf8').split(" ")[1]
-            #     #rollback_message(topic, address.decode("utf8"))
-            #     print("Timeout occured: Server is handling ...")
-            #     # sequence_number, message_list, clients_idx = previous_sn, previous_ml, previous_ci
-            #     pull_socket.close()
     
 
     if socks.get(publisher) == zmq.POLLIN:

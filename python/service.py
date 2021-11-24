@@ -176,7 +176,7 @@ def ack_message(client, address, response, socket, topic):
             socket.recv() #socket times out after 2 seconds
             print ("Received ACK")
             break
-        except:
+        except Exception:
             print("Timeout occured: Server is handling ...")
             time.sleep(2)
             client.send_multipart([address, b"", response])

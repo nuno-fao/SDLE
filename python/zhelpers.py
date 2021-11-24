@@ -85,3 +85,10 @@ def get_address(id):
     ID = int(id.split("_")[1])
     random.seed(ID)
     return random.randint(5000, 9000)
+
+def start_pub_socket(address):
+    context = zmq.Context().instance()
+    socket = context.socket(zmq.REQ)
+    set_id(socket) #sets random id
+    socket.connect(address)
+    return socket

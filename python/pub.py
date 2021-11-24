@@ -19,7 +19,12 @@ def start():
 def put(topic, message):
     socket = start()
     socket.send("PUT {topic} {message}".format(topic=topic, message=message).encode())
-    response = socket.recv()
-    #print("Successfully published message: " + message)
+    response = None
+    try:
+        response = socket.recv()
+    except Exception as e:
+        if (e.errno == zmq.EAGAIN):
+            raise IOError("Could not receive response. Server is down!")
+    socket.close()
 
-put("TESTE", zhelpers.generate_random_message()) 
+    print("Put was executed successfully")

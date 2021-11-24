@@ -42,7 +42,6 @@ poller.register(client, zmq.POLLIN)
 def garbage_collect():
     while True:
         clean_messages()
-        print(clients_idx,message_list,sequence_number)
         time.sleep(5)
 
 def check_subscribers(topic):
@@ -89,7 +88,6 @@ def retrieve_message(topic, address):
     sorted_messages = sorted(message_list, key = lambda x: (x[0], x[2]))
     idx = clients_idx[address][topic]
     topic_messages = [x for x in sorted_messages if determine_unreceived(x,topic,idx)] #possible messages from the required topic
-    print("sorted_messages: ", sorted_messages)
     if len(topic_messages) < 1:
         return b"All messages were read from this topic"
     message = topic_messages[0][1].encode()
@@ -116,6 +114,7 @@ def unsubscribe_topic(topic, address):
         return b"Client not subscribed to topic"
     
     clients_idx[address].pop(topic)
+    clean_clients()
     return b"Successfully unsubscribed to topic"
 
 
@@ -131,8 +130,10 @@ def handle_REQ(request, address = None):
         return subscribe_topic(req_list[1], address)
     elif req_type == "UNSUBSCRIBE":
         return unsubscribe_topic(req_list[1], address)
+    elif req_type == "STATE":
+        return state().encode()
 
-    return "response to request".encode()
+    return b"Invalid Request. Try again."
 
 def determine_delivered(oldest_subs,x):
     (topic1, _, seq1) = x
@@ -142,6 +143,16 @@ def determine_delivered(oldest_subs,x):
         return False
     else:
         return True
+
+def clean_clients():
+    # cleans information about clients not subscribed to any topics
+    toRemoveKeys = []
+    for client in clients_idx.keys():
+        if list(clients_idx[client].keys()) == []:
+            toRemoveKeys.append(client)
+    for key in toRemoveKeys:
+        clients_idx.pop(key)
+
 
 
 def clean_messages():
@@ -159,13 +170,7 @@ def clean_messages():
 
     message_list[:] = [x for x in message_list if determine_delivered(oldest_subs,x)]
     
-    ### clean information about clients not subscribed to any topic
-    toRemoveKeys = []
-    for client in clients_idx.keys():
-        if list(clients_idx[client].keys()) == []:
-            toRemoveKeys.append(client)
-    for key in toRemoveKeys:
-        clients_idx.pop(key)
+
 
 def ack_message(client, address, response, socket, topic):
     tries = 5
@@ -218,6 +223,20 @@ gc = Thread(target=garbage_collect)
 gc.daemon = True  # allows us to kill the process on ctrl+c
 gc.start()
 
+def state():
+    message = "="*20 + "Clients information" + "="*20 + "\n"
+    for client in clients_idx.keys():
+        topics = clients_idx[client].keys()
+        message += (f"Client {client} is subscribed to {len(topics)} topics\n")
+        message += "\t" + ", ".join(topics) + "\n"
+
+    message += "="*20 + "Topics information" + "="*20 + "\n"
+
+    all_topics = list(set([x[0] for x in message_list]))
+    for topic in all_topics:
+        n = len([x for x in message_list if x[0] == topic])
+        message += f"\ttopic {topic}: {n} messages\n"
+    return message
 
 
 while True:
@@ -229,10 +248,10 @@ while True:
         address, empty, message = client.recv_multipart()
         response = handle_REQ(message, address.decode('utf8'))
         client.send_multipart([address, empty, response], zmq.DONTWAIT) 
-        port = zhelpers.get_address(address.decode("utf8"))
-        pull_socket = zhelpers.start_ACK_socket("tcp://127.0.0.1:" + str(port))
         
         if message.decode('utf8').split(" ")[0] == "GET":
+            port = zhelpers.get_address(address.decode("utf8"))
+            pull_socket = zhelpers.start_ACK_socket("tcp://127.0.0.1:" + str(port))
             
             ack_thread = Thread(target=ack_message, args=(client, address, response, pull_socket, message.decode('utf8').split(" ")[1]))
             ack_thread.daemon = True
@@ -248,6 +267,8 @@ while True:
 
     if rewrite:
         save_changes()
+
+
 
 
 publisher.close()

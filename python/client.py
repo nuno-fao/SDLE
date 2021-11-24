@@ -35,9 +35,12 @@ def unsubscribe(topic , ID):
     socket.close()
 
 
-def get(topic, ID):
+def get(topic, ID, crash=False):
     socket = zhelpers.start(ID, SERVICE_ADDRESS)
     socket.send("GET {topic}".format(topic=topic).encode(), zmq.DONTWAIT)
+    if crash:
+        time.sleep(15)
+        # return None
     # time.sleep(15) #simulates a crash before receiving the message
     response = None
     try:
@@ -58,8 +61,19 @@ def get(topic, ID):
     # #time.sleep(10) sleep to simulate a delay receiving an ACK
     client_ACK.send(b"ACK") 
     client_ACK.close()
-    
-    
-    #TODO: close client_ACK socket (?)
 
-subscribe("TESTE",1)
+
+
+
+def state():
+    socket = zhelpers.start_pub_socket(SERVICE_ADDRESS)
+    socket.send(b"STATE", zmq.DONTWAIT)
+    response = None
+    try:
+        response = socket.recv()
+    except Exception as e:
+        if (e.errno == zmq.EAGAIN):
+            raise IOError("Could not receive response. Server is down!")
+    socket.close()
+    print("Service state\n" + response.decode("utf8"))
+

@@ -22,10 +22,10 @@ def put(topic, message):
     response = None
     socket.RCVTIMEO = 5000
     try:
-        response = socket.recv()
+        message, status = socket.recv_multipart()
     except Exception as e:
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
 
-    # print("Put was executed successfully")
+    print(f"Put status = {status.decode('utf8')}")

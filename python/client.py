@@ -26,6 +26,7 @@ def subscribe(topic, ID):
 def unsubscribe(topic , ID):
     socket = zhelpers.start(ID, SERVICE_ADDRESS)
     socket.send("UNSUBSCRIBE {topic}".format(topic=topic).encode())
+    socket.RCVTIMEO = 5000
     response = None
     try:
         response = socket.recv()
@@ -38,10 +39,11 @@ def unsubscribe(topic , ID):
 def get(topic, ID, crash=False):
     socket = zhelpers.start(ID, SERVICE_ADDRESS)
     socket.send("GET {topic}".format(topic=topic).encode(), zmq.DONTWAIT)
+    socket.RCVTIMEO = 5000
     if crash:
+        # time.sleep(15) #simulates a crash before receiving the message
         time.sleep(15)
         # return None
-    # time.sleep(15) #simulates a crash before receiving the message
     response = None
     try:
         response = socket.recv()
@@ -51,7 +53,7 @@ def get(topic, ID, crash=False):
     socket.close()
     time.sleep(0.1)
 
-    print("Received response: {message}. Sending ACK.".format(message = response.decode("utf8") ))
+    print("Received response: {message}.".format(message = response.decode("utf8") ))
 
     client_ACK = context.socket(zmq.PUSH)
     port = zhelpers.get_address("Client_" + str(ID))
@@ -68,6 +70,7 @@ def get(topic, ID, crash=False):
 def state():
     socket = zhelpers.start_pub_socket(SERVICE_ADDRESS)
     socket.send(b"STATE", zmq.DONTWAIT)
+    socket.RCVTIMEO = 5000
     response = None
     try:
         response = socket.recv()
@@ -75,5 +78,5 @@ def state():
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
-    print("Service state\n" + response.decode("utf8"))
+    print("Service state:\n" + response.decode("utf8"))
 

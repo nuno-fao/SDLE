@@ -20,6 +20,7 @@ def put(topic, message):
     socket = start()
     socket.send("PUT {topic} {message}".format(topic=topic, message=message).encode())
     response = None
+    socket.RCVTIMEO = 5000
     try:
         response = socket.recv()
     except Exception as e:
@@ -27,4 +28,4 @@ def put(topic, message):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
 
-    print("Put was executed successfully")
+    # print("Put was executed successfully")

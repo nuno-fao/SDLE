@@ -179,7 +179,7 @@ def ack_message(client, address, response, socket, topic):
     while count <= tries:
         try:
             socket.recv() #socket times out after 2 seconds
-            print ("Received ACK")
+            # Received ACK
             break
         except Exception:
             print("Timeout occured: Server is handling ...")
@@ -244,11 +244,9 @@ while True:
     socks = dict(poller.poll())
 
     if socks.get(client) == zmq.POLLIN:
-        previous_sn, previous_ml, previous_ci = sequence_number, message_list, clients_idx
         address, empty, message = client.recv_multipart()
         response = handle_REQ(message, address.decode('utf8'))
         client.send_multipart([address, empty, response], zmq.DONTWAIT) 
-        
         if message.decode('utf8').split(" ")[0] == "GET":
             port = zhelpers.get_address(address.decode("utf8"))
             pull_socket = zhelpers.start_ACK_socket("tcp://127.0.0.1:" + str(port))
@@ -262,7 +260,7 @@ while True:
     if socks.get(publisher) == zmq.POLLIN:
         address, empty, message = publisher.recv_multipart()
         response = handle_REQ(message, address.decode('utf8'))
-        publisher.send_multipart([address, empty, response])
+        publisher.send_multipart([address, empty, response], zmq.DONTWAIT)
         rewrite = True
 
     if rewrite:

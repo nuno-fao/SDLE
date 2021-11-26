@@ -11,7 +11,6 @@ import zmq
 import zhelpers
 
 
-# context = zmq.Context.instance()
 
 publisher = context.socket(zmq.ROUTER)
 publisher.bind("tcp://*:5671")
@@ -42,7 +41,6 @@ poller.register(client, zmq.POLLIN)
 def garbage_collect():
     while True:
         clean_messages()
-        #clean_topics()
         time.sleep(5)
 
 def check_subscribers(topic):
@@ -59,7 +57,6 @@ def insert_message(topic, message, address): #inserts message in topic
     global sequence_number
     #check if any subscribers are subscribed to topic
     if not check_subscribers(topic):
-        # sequence_number.pop(topic)
         print("DISCARDING MESSAGE: no subscribers.")
         return [b"Put operation failed.", b"-1"]
 
@@ -117,7 +114,7 @@ def unsubscribe_topic(topic, address):
     
     clients_idx[address].pop(topic)
     clean_clients()
-    # clean_topics()
+    clean_topics()
     return [b"Successfully unsubscribed to topic", b"0"]
 
 
@@ -158,7 +155,9 @@ def clean_clients():
 
 def clean_topics():
     toRemoveTopics = []
-    all_topics = [x[0] for x in message_list]
+    all_topics = []
+    for client in clients_idx:
+        all_topics += (list(clients_idx[client].keys()))
     for topic in sequence_number.keys():
         if topic not in all_topics:
             toRemoveTopics.append(topic)
@@ -185,10 +184,10 @@ def clean_messages():
 def ack_message(client, address, response, socket, topic):
     tries = 5
     count = 1
-    pull_socket.RCVTIMEO = 2000
+    pull_socket.RCVTIMEO = 2000 #socket times out after 2 seconds
     while count <= tries:
         try:
-            socket.recv() #socket times out after 2 seconds
+            socket.recv()
             # Received ACK
             break
         except Exception:
@@ -269,7 +268,6 @@ while True:
 
     if socks.get(publisher) == zmq.POLLIN:
         address, empty, message = publisher.recv_multipart()
-        # print(message.decode('utf8'))
         response = handle_REQ(message, address.decode('utf8'))
         publisher.send_multipart([address, empty, response[0], response[1]], zmq.DONTWAIT)
         rewrite = True
@@ -277,9 +275,4 @@ while True:
     if rewrite:
         save_changes()
 
-
-
-
-publisher.close()
-client.close()
 

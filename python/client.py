@@ -43,9 +43,7 @@ def get(topic, ID, crash=False):
     socket.send("GET {topic}".format(topic=topic).encode(), zmq.DONTWAIT)
     socket.RCVTIMEO = 5000
     if crash:
-        # time.sleep(15) #simulates a crash before receiving the message
-        time.sleep(15)
-        # return None
+        time.sleep(5)  #simulates a crash before receiving the message
     response = None
     try:
         response, status = socket.recv_multipart()

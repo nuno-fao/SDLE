@@ -1,14 +1,7 @@
-#
-#   Request-reply client in Python
-#   Connects REQ socket to tcp://localhost:5559
-#   Sends "Hello" to server, expects "World" back
-#
-
 import zhelpers
 import zmq
 import sys
 
-#  Prepare our context and sockets
 def start():
     context = zmq.Context().instance()
     socket = context.socket(zmq.REQ)

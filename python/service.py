@@ -42,7 +42,7 @@ poller.register(client, zmq.POLLIN)
 def garbage_collect():
     while True:
         clean_messages()
-        clean_topics()
+        #clean_topics()
         time.sleep(5)
 
 def check_subscribers(topic):

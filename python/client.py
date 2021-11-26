@@ -16,11 +16,12 @@ def subscribe(topic, ID):
     socket.RCVTIMEO = 5000
     response = None
     try:
-        response = socket.recv()
+        response, status = socket.recv_multipart()
     except Exception as e:
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
+    print(f"Subscribe operation status = {status.decode('utf8')}")
 
 
 def unsubscribe(topic , ID):
@@ -29,11 +30,12 @@ def unsubscribe(topic , ID):
     socket.RCVTIMEO = 5000
     response = None
     try:
-        response = socket.recv()
+        response, status = socket.recv_multipart()
     except Exception as e:
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
+    print(f"Unsubscribe operation status = {status.decode('utf8')}")
 
 
 def get(topic, ID, crash=False):
@@ -46,14 +48,17 @@ def get(topic, ID, crash=False):
         # return None
     response = None
     try:
-        response = socket.recv()
+        response, status = socket.recv_multipart()
     except Exception as e:
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")
     socket.close()
     time.sleep(0.1)
 
-    print("Received response: {message}.".format(message = response.decode("utf8") ))
+    if int(status.decode("utf8")) == -1:
+        print(f"Couln't retrieve message from topic {topic}")
+    else:
+        print("Consumed message: {message}.".format(message = response.decode("utf8") ))
 
     client_ACK = context.socket(zmq.PUSH)
     port = zhelpers.get_address("Client_" + str(ID))
@@ -73,7 +78,7 @@ def state():
     socket.RCVTIMEO = 5000
     response = None
     try:
-        response = socket.recv()
+        response, status = socket.recv_multipart()
     except Exception as e:
         if (e.errno == zmq.EAGAIN):
             raise IOError("Could not receive response. Server is down!")

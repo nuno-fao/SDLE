@@ -1,8 +1,10 @@
 The project was developed in python 3.9.2.
 
+To have the zmq library just run the following command: "pip install pyzmq".
+
 Running the project:
 To run the project first run the serve with the command "python service.py".
-After that we can run the requests from the client from the test_api.py file. To execute the operations we use the python function eval that calls the respective method in the client file.
+After that we can run the requests from the client from the test_api.py file. To execute the operations we use the python function eval that calls the respective method in the client or publisher file.
 With this being said, some examples on how to run the 4 operations:
 Subscribe - python test_api.py "subscribe('topic1', 1)"
 Put - python test_api.py "put('topic1', 'message1')" 

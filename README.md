@@ -1,10 +1,10 @@
 # SDLE Project
 
-SDLE Project for group T&lt;n&gt;G&lt;p&gt;&lt;q&gt;.
+SDLE Project for group T03G12.
 
 Group members:
 
-1. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
-2. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
-3. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
-4. &lt;first name&gt; &lt;family name&gt; (&lt;email address&gt;)
+1. Caio Nogueira (up201806218@edu.fe.up.pt)
+2. Diogo Almeida (up201806630@edu.fe.up.pt)
+3. Nuno Oliveira (up201806525@edu.fe.up.pt)
+4. Pedro Queirós (up201806329@edu.fe.up.pt)

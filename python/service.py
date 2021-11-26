@@ -42,6 +42,7 @@ poller.register(client, zmq.POLLIN)
 def garbage_collect():
     while True:
         clean_messages()
+        clean_topics()
         time.sleep(5)
 
 def check_subscribers(topic):
@@ -116,6 +117,7 @@ def unsubscribe_topic(topic, address):
     
     clients_idx[address].pop(topic)
     clean_clients()
+    # clean_topics()
     return [b"Successfully unsubscribed to topic", b"0"]
 
 
@@ -134,7 +136,7 @@ def handle_REQ(request, address = None):
     elif req_type == "STATE":
         return [state().encode(), b"0"]
 
-    return b"Invalid Request. Try again."
+    return [b"Invalid Request. Try again.", b"-1"]
 
 def determine_delivered(oldest_subs,x):
     (topic1, _, seq1) = x
@@ -154,7 +156,14 @@ def clean_clients():
     for key in toRemoveKeys:
         clients_idx.pop(key)
 
-
+def clean_topics():
+    toRemoveTopics = []
+    all_topics = [x[0] for x in message_list]
+    for topic in sequence_number.keys():
+        if topic not in all_topics:
+            toRemoveTopics.append(topic)
+    for t in toRemoveTopics:
+        sequence_number.pop(t)
 
 def clean_messages():
 

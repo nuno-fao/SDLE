@@ -4,7 +4,7 @@ import sys
 
 from kademlia.network import Server
 
-DEBUG = True
+DEBUG = False
 
 def start(port, bootstrap_address=None, bootstrap_port=None):
     handler = logging.StreamHandler()

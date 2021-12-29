@@ -1,6 +1,9 @@
+import asyncio
 import sys
 import node
 import json
+from threading import Thread
+from prompt import Prompt
 
 PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"
@@ -25,6 +28,27 @@ BOOTSTRAP_FLAG = "-b"
 
 # asyncio.run(run())
 
+async def register(server, username, address, port):
+
+    user = await server.get(username)
+
+    #there are no user with that username
+    print("USER: " + str(user))
+    if user is None:
+        new_user = {
+            "follower": [],
+            "following": [],
+            "address": address,
+            "port": port
+        }
+
+        new_user_json = json.dumps(new_user)
+        await server.set(username, new_user_json)
+
+    else:
+        raise Exception("Username already exists!")
+
+
 
 def main():
 
@@ -40,12 +64,36 @@ def main():
         address = args[args.index(BOOTSTRAP_FLAG) + 1]
         address_port = address.split(":")
         server, loop = node.start(port, address_port[0], int(address_port[1]))
-        loop.run_forever()
-        
+        Thread(target=loop.run_forever, daemon=True).start()
+                
     else:
         server, loop = node.start(port)
-        loop.run_forever()
-               
+        
+        Thread(target=loop.run_forever, daemon=True).start()
+
+
+    #prompt = Prompt(loop)
+    username = input("Username: ")
+    try:
+        asyncio.run_coroutine_threadsafe(register(server, username, "127.0.0.1", port), loop)
+    except Exception:
+        print(Exception)
+
+    while True:
+        a = 1
+
+    # print(username)
+
+    
+
+    #loop = asyncio.get_event_loop()
+    #loop.run_until_complete(register(server, "127.0.0.1", port, prompt))
+    # Thread(target=loop.run_forever, daemon=True).start()
+    # future = asyncio.run_coroutine_threadsafe(register(server, "127.0.0.1", port, prompt),loop)
+    
+    # print(future.result())
+
+    
         
     
 

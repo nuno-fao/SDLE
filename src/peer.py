@@ -61,7 +61,7 @@ def main():
         node = menu.auth_menu(kserver)
 
     
-    node.parse_node()
+    menu.main_menu(kserver)
     
     while True: pass
     

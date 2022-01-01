@@ -48,7 +48,8 @@ class KServer:
                     "port": self.port,
                     "message_number": 0,
                     "redirects": {},
-                    "messages":[]
+                    "messages":[],
+                    "username": username
                 }
 
             value_json = json.dumps(value)
@@ -73,7 +74,9 @@ class KServer:
                     "address": self.address, 
                     "port": self.port, 
                     "message_number": user["message_number"], 
-                    "redirects": user["redirects"]
+                    "redirects": user["redirects"],
+                    "messages":[],
+                    "username": username
                 }
             value_json = json.dumps(value)
             await self.server.set(username, value_json)
@@ -84,7 +87,36 @@ class KServer:
         else:
             raise Exception("User does not exist!")
 
-    
+
+    async def get_user_by_username(self, username):
+        user = await self.server.get(username)
+
+        user = json.loads(user)
+
+        if user != None:
+            value = {"followers": user["followers"], 
+                    "following": user["following"], 
+                    "address": self.address, 
+                    "port": self.port, 
+                    "message_number": user["message_number"], 
+                    "redirects": user["redirects"],
+                    "messages": user["messages"],
+                    "username": username
+                }
+            node = KNode(value)
+            return node
 
 
-    # async def follow_user(username):
+    async def follow_user(self, username):
+        user = await self.get_user_by_username(username)
+
+        user.followers.append(self.node.username)
+        self.node.following.append(username)
+        
+        #TODO: implement connection between 2 peers
+        # reader, writer = await asyncio.open_connection(user.port, user.address, loop=self.loop)
+
+        # self.node.show_following()
+
+
+

@@ -5,7 +5,6 @@ import menu
 from server import KServer
 import json
 from threading import Thread
-from prompt import Prompt
 
 PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"

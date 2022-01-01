@@ -1,8 +1,11 @@
 import logging
 import asyncio
 import json
+import constants
+from threading import Thread
 from kademlia.network import Server
 from node import KNode
+
 
 DEBUG = False
 
@@ -23,7 +26,6 @@ class KServer:
             log.addHandler(handler)
         
         self.loop = asyncio.get_event_loop()
-        # self.prompt = Prompt(self.loop)  
         
         self.server = Server()
         self.loop.run_until_complete(self.server.listen(self.port))
@@ -56,6 +58,7 @@ class KServer:
             await self.server.set(username, value_json)
 
             self.node = KNode(value)
+            Thread(target=self.listen, daemon=True).start()
             return self.node
         
         else:
@@ -64,7 +67,7 @@ class KServer:
     async def login(self, username):
         
         user = await self.server.get(username)
-        print("USER: ", user)
+        # print("USER: ", user)
 
         user = json.loads(user)
 
@@ -82,6 +85,7 @@ class KServer:
             await self.server.set(username, value_json)
 
             self.node = KNode(value)
+            Thread(target=self.listen, daemon=True).start()
             return self.node
 
         else:
@@ -96,27 +100,66 @@ class KServer:
         if user != None:
             value = {"followers": user["followers"], 
                     "following": user["following"], 
-                    "address": self.address, 
-                    "port": self.port, 
+                    "address": user["address"], 
+                    "port": user["port"], 
                     "message_number": user["message_number"], 
                     "redirects": user["redirects"],
                     "messages": user["messages"],
                     "username": username
                 }
             node = KNode(value)
+
             return node
+
+    async def create_listener(self):
+        self.listen_server = await asyncio.start_server(self.establish_connection, self.address, self.port)
+        await self.listen_server.serve_forever()
+    
+    async def close_listener(self):
+        self.listen_server.close()
+
+
+
+    def listen(self):
+        print(f"Listening on address {self.address}:{self.port}")
+        listen_loop = asyncio.new_event_loop()
+        listen_loop.run_until_complete(self.create_listener())
 
 
     async def follow_user(self, username):
         user = await self.get_user_by_username(username)
-
         user.followers.append(self.node.username)
         self.node.following.append(username)
-        
-        #TODO: implement connection between 2 peers
-        # reader, writer = await asyncio.open_connection(user.port, user.address, loop=self.loop)
+        self.update_user(self.node)
 
-        # self.node.show_following()
+        reader, writer = await asyncio.open_connection(user.address, user.port)
+        data = {"req_type": constants.FOLLOW_REQUEST ,"following_username": self.node.username}
+        json_data = json.dumps(data)
+        writer.write(json_data.encode())
+
+        await writer.drain()
+        writer.close()
+
+    
+    async def establish_connection(self, reader, writer):
+        while True:
+            data = await reader.readline()
+
+            if not data: break
+
+            json_str = data.decode()
+            request = json.loads(json_str)
+            
+            if request["req_type"] == constants.FOLLOW_REQUEST:
+                self.update_follower(request)
+
+    def update_user(self, node):
+        value_json = json.dumps(node.dump())
+        self.server.set(node.username, value_json)
 
 
+    def update_follower(self, request_data):
+        following_username = request_data["following_username"]
+        self.node.followers.append(following_username)
+        self.update_user(self.node)
 

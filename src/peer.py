@@ -10,28 +10,6 @@ PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"
 
 
-async def register(server, username, address, port):
-
-    user = await server.get(username)
-
-    #there are no user with that username
-    print("USER: " + str(user))
-    if user is None:
-        new_user = {
-            "follower": [],
-            "following": [],
-            "address": address,
-            "port": port
-        }
-
-        new_user_json = json.dumps(new_user)
-        await server.set(username, new_user_json)
-
-    else:
-        raise Exception("Username already exists!")
-
-
-
 def main():
 
     args = sys.argv
@@ -60,9 +38,10 @@ def main():
         node = menu.auth_menu(kserver)
 
     
-    menu.main_menu(kserver)
     
-    while True: pass
+    menu.main_menu(kserver)
+    #while True: 
+       
     
         
     

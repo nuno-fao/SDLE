@@ -14,7 +14,6 @@ class KNode:
     def show_following(self):
         print (f"{self.username} is following: ")
         print(self.following)
-
     
     def show_followers(self):
         print (f"{self.username} is followed by: ")
@@ -31,3 +30,4 @@ class KNode:
         }
 
         return value
+        

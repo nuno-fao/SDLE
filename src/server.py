@@ -48,8 +48,6 @@ class KServer:
                     "following": [],
                     "address": self.address,
                     "port": self.port,
-                    "message_number": 0,
-                    "redirects": {},
                     "messages":[],
                     "username": username
                 }
@@ -76,8 +74,6 @@ class KServer:
                     "following": user["following"], 
                     "address": self.address, 
                     "port": self.port, 
-                    "message_number": user["message_number"], 
-                    "redirects": user["redirects"],
                     "messages":[],
                     "username": username
                 }
@@ -102,8 +98,6 @@ class KServer:
                     "following": user["following"], 
                     "address": user["address"], 
                     "port": user["port"], 
-                    "message_number": user["message_number"], 
-                    "redirects": user["redirects"],
                     "messages": user["messages"],
                     "username": username
                 }
@@ -162,4 +156,15 @@ class KServer:
         following_username = request_data["following_username"]
         self.node.followers.append(following_username)
         await self.update_user(self.node)
+
+
+    # async def send_message_to_followers():
+
+
+    # async def post_message(self, message):
+    #     self.node.messages.append(message)
+
+    #     data = {"req_type": constants.POST ,"message": message}
+    #     json_data = json.dumps(data)
+
 

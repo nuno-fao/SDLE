@@ -58,6 +58,9 @@ def auth_menu(kserver):
 def main_menu(kserver):
     print("[1] Follow user")
     print("[2] Show followers")
+    print("[3] Show following")
+    print("[3] Post message")
+    print("[0] Exit")
     option = int(input("option > "))
     loop = kserver.loop
     
@@ -66,10 +69,25 @@ def main_menu(kserver):
         try:
             username = input("Username: ")
             future = asyncio.run_coroutine_threadsafe(kserver.follow_user(username), loop)
-            return future.result()
+            main_menu(kserver)
+            #return future.result()
         
         except Exception as e:
             print(e)
 
     elif option == 2:
         kserver.node.show_followers()
+        main_menu(kserver)
+
+    elif option == 3:
+        kserver.node.show_following()
+        main_menu(kserver)
+
+
+    elif option == 4:
+        message = input("Message: ")
+        future = asyncio.run_coroutine_threadsafe(kserver.post_message(message), loop)
+        main_menu(kserver)
+    
+    elif option == 0:
+        return

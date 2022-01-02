@@ -130,7 +130,7 @@ class KServer:
         user = await self.get_user_by_username(username)
         user.followers.append(self.node.username)
         self.node.following.append(username)
-        self.update_user(self.node)
+        await self.update_user(self.node)
 
         reader, writer = await asyncio.open_connection(user.address, user.port)
         data = {"req_type": constants.FOLLOW_REQUEST ,"following_username": self.node.username}
@@ -151,15 +151,15 @@ class KServer:
             request = json.loads(json_str)
             
             if request["req_type"] == constants.FOLLOW_REQUEST:
-                self.update_follower(request)
+                await self.update_follower(request)
 
-    def update_user(self, node):
+    async def update_user(self, node):
         value_json = json.dumps(node.dump())
-        self.server.set(node.username, value_json)
+        await self.server.set(node.username, value_json)
 
 
-    def update_follower(self, request_data):
+    async def update_follower(self, request_data):
         following_username = request_data["following_username"]
         self.node.followers.append(following_username)
-        self.update_user(self.node)
+        await self.update_user(self.node)
 

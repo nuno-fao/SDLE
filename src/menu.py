@@ -59,7 +59,8 @@ def main_menu(kserver):
     print("[1] Follow user")
     print("[2] Show followers")
     print("[3] Show following")
-    print("[3] Post message")
+    print("[4] Post message")
+    print("[5] Timeline")
     print("[0] Exit")
     option = int(input("option > "))
     loop = kserver.loop
@@ -86,8 +87,12 @@ def main_menu(kserver):
 
     elif option == 4:
         message = input("Message: ")
-        future = asyncio.run_coroutine_threadsafe(kserver.post_message(message), loop)
+        future = asyncio.run_coroutine_threadsafe(kserver.save_message(message), loop)
         main_menu(kserver)
     
+    elif option == 5:
+        future = asyncio.run_coroutine_threadsafe(kserver.get_timeline(), loop)
+        main_menu(kserver)
+
     elif option == 0:
         return

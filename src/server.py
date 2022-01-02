@@ -147,6 +147,13 @@ class KServer:
             if request["req_type"] == constants.FOLLOW_REQUEST:
                 await self.update_follower(request)
 
+            elif request["req_type"] == constants.GET:
+                print("Recebi o GET")
+                await self.post_message()
+
+            elif request["req_type"] == constants.POST:
+                await self.show_timeline(request)
+
     async def update_user(self, node):
         value_json = json.dumps(node.dump())
         await self.server.set(node.username, value_json)
@@ -158,13 +165,77 @@ class KServer:
         await self.update_user(self.node)
 
 
-    # async def send_message_to_followers():
+    async def send_message_to_node(self, node, message):
+        
+        try:
+            reader, writer = await asyncio.open_connection(node.address, node.port)
+
+            writer.write(message)
+
+            await writer.drain()
+
+            writer.close()
+
+        except Exception as e:
+            print(e)
+            return False
+
+        return reader, writer
+
+    async def save_message(self, message):
+        self.node.messages.append(message)
+
+        #await self.update_user(self.node)
 
 
-    # async def post_message(self, message):
-    #     self.node.messages.append(message)
+    async def post_message(self):
+        print("Entrei no post")
+        messages = self.node.messages
 
-    #     data = {"req_type": constants.POST ,"message": message}
-    #     json_data = json.dumps(data)
+        data = {"req_type": constants.POST, "username": self.node.username, "message": messages}
+        json_data = json.dumps(data)
+
+        followers_nodes = []
+        for user in self.node.followers:
+            followers_nodes.append(await self.get_user_by_username(user))
+
+        tasks = []
+
+        for follower_node in followers_nodes:
+            tasks.append(self.send_message_to_node(follower_node), json_data.encode())
+
+        await asyncio.gather(tasks)
+        #success = [followers_nodes[i] for i in range(len(tasks_results)) if tasks_results[i] == True]
+        #unsuccess = [followers_nodes[i] for i in range(len(tasks_results)) if tasks_results[i] == False]
+        
+        #return success, unsuccess
+
+    async def get_timeline(self):     
+        data = {"req_type": constants.GET}
+        json_data = json.dumps(data)
+
+        followings_nodes = []
+        for user in self.node.following:
+            followings_nodes.append(await self.get_user_by_username(user))
+        
+        tasks = []
+
+        for following_node in followings_nodes:
+            tasks.append(self.send_message_to_node(following_node), json_data.encode())
+
+
+        await asyncio.gather(tasks)
+        
+        
+    async def show_timeline(self, request):
+        print("Entrei no show")
+
+        message = request["message"]
+        username = request["username"]
+        print("User " + username + " published:")
+        for m in message:
+            print(m)
+        
+        
 
 

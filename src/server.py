@@ -5,6 +5,7 @@ import constants
 from threading import Thread
 from kademlia.network import Server
 from node import KNode
+from datetime import datetime
 
 
 DEBUG = False
@@ -183,30 +184,34 @@ class KServer:
         return reader, writer
 
     async def save_message(self, message):
-        self.node.messages.append(message)
+        self.node.messages.append((message,datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
 
-        #await self.update_user(self.node)
+        data = {"username": self.node.username, "message": self.node.messages}
+        json_data = json.dumps(data)
+
+        await self.server.set(self.node.username + "_tl", json_data)
+
+        
 
 
     async def post_message(self):
         print("Entrei no post")
         messages = self.node.messages
 
-        data = {"req_type": constants.POST, "username": self.node.username, "message": messages}
-        json_data = json.dumps(data)
+        
+        
+        # followers_nodes = []
+        # for user in self.node.followers:
+        #     followers_nodes.append(await self.get_user_by_username(user))
 
-        followers_nodes = []
-        for user in self.node.followers:
-            followers_nodes.append(await self.get_user_by_username(user))
+        # tasks = []
 
-        tasks = []
+        # for follower_node in followers_nodes:
+        #     tasks.append(self.send_message_to_node(follower_node), json_data.encode())
 
-        for follower_node in followers_nodes:
-            tasks.append(self.send_message_to_node(follower_node), json_data.encode())
-
-        await asyncio.gather(tasks)
+        # await asyncio.gather(tasks)
         #success = [followers_nodes[i] for i in range(len(tasks_results)) if tasks_results[i] == True]
-        #unsuccess = [followers_nodes[i] for i in range(len(tasks_results)) if tasks_results[i] == False]
+        
         
         #return success, unsuccess
 
@@ -216,15 +221,19 @@ class KServer:
 
         followings_nodes = []
         for user in self.node.following:
-            followings_nodes.append(await self.get_user_by_username(user))
+            # followings_nodes.append(await self.get_user_by_username(user))
+            print(user+"_tl")
+            result = await self.server.get(user+"_tl")
+            print(result)
         
-        tasks = []
 
-        for following_node in followings_nodes:
-            tasks.append(self.send_message_to_node(following_node), json_data.encode())
+        # tasks = []
+
+        # for following_node in followings_nodes:
+        #     tasks.append(self.send_message_to_node(following_node), json_data.encode())
 
 
-        await asyncio.gather(tasks)
+        # await asyncio.gather(tasks)
         
         
     async def show_timeline(self, request):
@@ -235,6 +244,10 @@ class KServer:
         print("User " + username + " published:")
         for m in message:
             print(m)
+
+    async def show_own_messages(self):
+        result = await self.server.get(self.node.username+"_tl")
+        print(result)
         
         
 

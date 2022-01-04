@@ -5,6 +5,9 @@ import constants
 from threading import Thread
 from kademlia.network import Server
 from node import KNode
+import pytz
+from datetime import datetime
+from tzlocal import get_localzone
 
 
 DEBUG = False
@@ -194,7 +197,7 @@ class KServer:
         
 
     async def save_message(self, message):
-        self.node.messages.append(message)
+        self.node.messages.append((message,str(datetime.now()).split('.')[0],str(get_localzone())))
 
 
     async def post_message(self, writer):
@@ -231,12 +234,28 @@ class KServer:
         
     def show_timeline(self, requests):
         print('\n')
+
+        timeline = []
+        
+        localtz = pytz.timezone(str(get_localzone()))
+
+        # convert times tuples and join all messages
         for request in requests:
-            message = request["message"]
+            messages = request["message"]
             username = request["username"]
-            print("User " + username + " published:")
-            for m in message:
-                print(m + '\n')
+            for m in messages:
+                (message, time, pubtz) = m
+                time = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+                pub_time = pytz.timezone(pubtz)
+                pub = pub_time.localize(time)
+                localtime = pub.astimezone(localtz).strftime("%Y-%m-%d %H:%M:%S")
+                timeline.append((username,message,localtime))
+
+        #sort list
+        timeline.sort(key=lambda tup: tup[2])  
+
+        for message in timeline:
+            print( message[0] + " posted: \t\t" + str(message[2]) + "\n" + message[1] + "\n\n")
 
         
         

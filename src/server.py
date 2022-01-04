@@ -5,7 +5,6 @@ import constants
 from threading import Thread
 from kademlia.network import Server
 from node import KNode
-from datetime import datetime
 
 
 DEBUG = False
@@ -66,7 +65,6 @@ class KServer:
     async def login(self, username):
         
         user = await self.server.get(username)
-        # print("USER: ", user)
 
         user = json.loads(user)
 
@@ -123,37 +121,36 @@ class KServer:
 
     async def follow_user(self, username):
         user = await self.get_user_by_username(username)
-        user.followers.append(self.node.username)
         self.node.following.append(username)
         await self.update_user(self.node)
-
         reader, writer = await asyncio.open_connection(user.address, user.port)
         data = {"req_type": constants.FOLLOW_REQUEST ,"following_username": self.node.username}
-        json_data = json.dumps(data)
+        json_data = json.dumps(data) + '\n'
         writer.write(json_data.encode())
-
+        
         await writer.drain()
-        writer.close()
+
+        writer.close()       
+        await writer.wait_closed()
+
+        
 
     
     async def establish_connection(self, reader, writer):
-        while True:
-            data = await reader.readline()
+        data = await reader.readline()
 
-            if not data: break
 
-            json_str = data.decode()
-            request = json.loads(json_str)
-            
-            if request["req_type"] == constants.FOLLOW_REQUEST:
-                await self.update_follower(request)
+        json_str = data.decode()
+        request = json.loads(json_str)
+        
+        if request["req_type"] == constants.FOLLOW_REQUEST:
+            await self.update_follower(request)
 
-            elif request["req_type"] == constants.GET:
-                print("Recebi o GET")
-                await self.post_message()
+            writer.close()
+            await writer.wait_closed()
 
-            elif request["req_type"] == constants.POST:
-                await self.show_timeline(request)
+        elif request["req_type"] == constants.GET:
+            await self.post_message(writer)
 
     async def update_user(self, node):
         value_json = json.dumps(node.dump())
@@ -166,88 +163,81 @@ class KServer:
         await self.update_user(self.node)
 
 
-    async def send_message_to_node(self, node, message):
-        
+    async def send_message_to_following(self, user, message):
+
         try:
-            reader, writer = await asyncio.open_connection(node.address, node.port)
+
+            reader, writer = await asyncio.open_connection(user.address, user.port)
 
             writer.write(message)
 
-            await writer.drain()
+            await writer.drain()      
+            
+            data = await reader.readline()
 
-            writer.close()
+            writer.close()       
+            await writer.wait_closed()
+        
+            json_str = data.decode()
+
+            request = json.loads(json_str)
+            
+            
+            if request["req_type"] == constants.POST:
+                return request
+
 
         except Exception as e:
             print(e)
-            return False
+            return None
 
-        return reader, writer
+        
 
     async def save_message(self, message):
-        self.node.messages.append((message,datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
-
-        data = {"username": self.node.username, "message": self.node.messages}
-        json_data = json.dumps(data)
-
-        await self.server.set(self.node.username + "_tl", json_data)
-
-        
+        self.node.messages.append(message)
 
 
-    async def post_message(self):
-        print("Entrei no post")
+    async def post_message(self, writer):
         messages = self.node.messages
 
-        
-        
-        # followers_nodes = []
-        # for user in self.node.followers:
-        #     followers_nodes.append(await self.get_user_by_username(user))
+        data = {"req_type": constants.POST, "username": self.node.username, "message": messages}
+        json_data = json.dumps(data) + '\n'
 
-        # tasks = []
-
-        # for follower_node in followers_nodes:
-        #     tasks.append(self.send_message_to_node(follower_node), json_data.encode())
-
-        # await asyncio.gather(tasks)
-        #success = [followers_nodes[i] for i in range(len(tasks_results)) if tasks_results[i] == True]
         
-        
-        #return success, unsuccess
+        writer.write(json_data.encode())
 
-    async def get_timeline(self):     
+        await writer.drain()
+
+        writer.close()
+        await writer.wait_closed()
+
+
+    async def get_timeline(self):   
+         
         data = {"req_type": constants.GET}
-        json_data = json.dumps(data)
+        json_data = json.dumps(data) + '\n'
 
         followings_nodes = []
         for user in self.node.following:
-            # followings_nodes.append(await self.get_user_by_username(user))
-            print(user+"_tl")
-            result = await self.server.get(user+"_tl")
-            print(result)
-        
+            followings_nodes.append(await self.get_user_by_username(user))
 
-        # tasks = []
+        timeline = []
 
-        # for following_node in followings_nodes:
-        #     tasks.append(self.send_message_to_node(following_node), json_data.encode())
+        for following_node in followings_nodes:
+            timeline.append(await self.send_message_to_following(following_node, json_data.encode()))
 
-
-        # await asyncio.gather(tasks)
+        return timeline
         
         
-    async def show_timeline(self, request):
-        print("Entrei no show")
+    def show_timeline(self, requests):
+        print('\n')
+        for request in requests:
+            message = request["message"]
+            username = request["username"]
+            print("User " + username + " published:")
+            for m in message:
+                print(m + '\n')
 
-        message = request["message"]
-        username = request["username"]
-        print("User " + username + " published:")
-        for m in message:
-            print(m)
-
-    async def show_own_messages(self):
-        result = await self.server.get(self.node.username+"_tl")
-        print(result)
         
         
 

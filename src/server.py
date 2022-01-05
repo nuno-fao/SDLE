@@ -150,7 +150,12 @@ class KServer:
             await writer.wait_closed()
 
         elif request["req_type"] == constants.GET:
-            await self.post_message(writer)
+            redirects = None
+            if "redirects" in request:
+                redirects = request["redirects"]
+            await self.post_message(writer, redirects)
+        
+
 
     async def update_user(self, node):
         value_json = json.dumps(node.dump())
@@ -163,7 +168,7 @@ class KServer:
         await self.update_user(self.node)
 
 
-    async def send_message_to_following(self, user, message):
+    async def send_message_to_node(self, user, message):
 
         try:
 
@@ -184,7 +189,8 @@ class KServer:
             
             
             if request["req_type"] == constants.POST:
-                return request
+                #print("Mensagem recebida: ", request["message"])
+                return request["message"]
 
 
         except Exception as e:
@@ -197,10 +203,34 @@ class KServer:
         self.node.messages.append(message)
 
 
-    async def post_message(self, writer):
-        messages = self.node.messages
+    async def post_message(self, writer, redirects = None):
+        # messages = self.node.messages
+        messages = [(self.node.username, msg) for msg in self.node.messages]
 
-        data = {"req_type": constants.POST, "username": self.node.username, "message": messages}
+        if redirects != None:
+            nodes_connected = []
+            redirect_users = [await self.get_user_by_username(x) for x in redirects[:constants.MAX_CONNECTIONS]]
+            # following_nodes = self.node.following
+            #followings_nodes.sort(key = lambda x: len(x.following))
+            
+            rest_redirects = redirects[constants.MAX_CONNECTIONS:]
+            
+            for user in redirect_users:
+                for k in list(rest_redirects):
+                    if k in nodes_connected:
+                        rest_redirects.remove(k)
+
+                data = {"req_type": constants.GET, "redirects": rest_redirects}
+                json_data = json.dumps(data) + '\n'
+                
+                redirect_messages = await self.send_message_to_node(user, json_data.encode())
+                messages += redirect_messages
+                nodes_connected += [x for (x, y) in redirect_messages]
+
+
+        data = {"req_type": constants.POST, "message": messages}
+
+
         json_data = json.dumps(data) + '\n'
 
         
@@ -214,29 +244,44 @@ class KServer:
 
     async def get_timeline(self):   
          
-        data = {"req_type": constants.GET}
-        json_data = json.dumps(data) + '\n'
-
         followings_nodes = []
         for user in self.node.following:
             followings_nodes.append(await self.get_user_by_username(user))
-
+            
+        followings_nodes.sort(key = lambda x: len(x.following))
         timeline = []
 
-        for following_node in followings_nodes:
-            timeline.append(await self.send_message_to_following(following_node, json_data.encode()))
+        hierarchy_nodes = followings_nodes[constants.MAX_CONNECTIONS:]
+        
 
+        nodes_connected = []
+        for following_node in followings_nodes[:constants.MAX_CONNECTIONS]:
+            redirects = [x.username for x in hierarchy_nodes]
+            # num_redirects = len(hierarchy_nodes) // constants.MAX_CONNECTIONS
+            # hierarchy_nodes = hierarchy_nodes[constants.MAX_CONNECTIONS:]
+
+            data = {"req_type": constants.GET, "redirects": redirects}
+            json_data = json.dumps(data) + '\n'
+            returned_messages = await self.send_message_to_node(following_node, json_data.encode())
+            timeline += returned_messages
+            #print("Returned messages: ", returned_messages)
+            nodes_connected += [x for (x, y) in returned_messages]
+
+            # print("Nodes connected: ", nodes_connected)
+            # print("Returned messages: ", returned_messages)
+            for k in list(hierarchy_nodes):
+                if k.username in nodes_connected:
+                    # print(f"Removing {k.username} from hierarchy_nodes")
+                    hierarchy_nodes.remove(k)
+
+            # print("hierarchy_nodes: ", hierarchy_nodes)
+    
         return timeline
         
-        
-    def show_timeline(self, requests):
-        print('\n')
-        for request in requests:
-            message = request["message"]
-            username = request["username"]
-            print("User " + username + " published:")
-            for m in message:
-                print(m + '\n')
+    
+    def show_timeline(self, messages):
+        for user, msg in messages:
+            print("User: " + user + ": " + msg + '\n')
 
         
         

@@ -10,6 +10,7 @@ PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"
 
 
+
 def main():
 
     args = sys.argv
@@ -24,20 +25,22 @@ def main():
     if BOOTSTRAP_FLAG in args:
         address = args[args.index(BOOTSTRAP_FLAG) + 1]
         address_port = address.split(":")
-        server, loop = kserver.start([(address_port[0], int(address_port[1]))])
+        loop = kserver.start([(address_port[0], int(address_port[1]))])
         Thread(target=loop.run_forever, daemon=True).start()
 
     else:
-        server, loop = kserver.start()
+        loop = kserver.start()
         
         Thread(target=loop.run_forever, daemon=True).start()
 
 
     node = menu.auth_menu(kserver)
     while node == None:
-        node = menu.auth_menu(kserver)
+       node = menu.auth_menu(kserver)
 
-    
+    if node == False:
+        return
+  
     
     menu.main_menu(kserver)
     #while True: 

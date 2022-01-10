@@ -6,6 +6,9 @@ class KNode:
         self.messages = value["messages"]
         self.port = value["port"]
         self.address = value["address"]
+        self.online = value["online"]
+        self.timeline = value["timeline"]
+        self.followers_with_timeline = value["followers_with_timeline"]
 
     def show_node(self):
         print(f"Node {self.username}")
@@ -26,7 +29,10 @@ class KNode:
             "following": self.following,
             "messages": self.messages,
             "port": self.port,
-            "address": self.address
+            "address": self.address,
+            "online": self.online,
+            "timeline": self.timeline,
+            "followers_with_timeline": self.followers_with_timeline
         }
 
         return value

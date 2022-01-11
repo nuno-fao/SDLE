@@ -452,6 +452,8 @@ class KServer:
 
         following_nodes = list(filter(lambda x: x.online == True, following_nodes))
 
+        if following_nodes == []:
+            return []
         #replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
 
         #offline_nodes = []
@@ -477,6 +479,9 @@ class KServer:
             for k in list(hierarchy_nodes):
                 if k.username in nodes_connected:
                     hierarchy_nodes.remove(k)
+
+        if timeline == []:
+            return await self.get_timeline()
 
         replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]

@@ -9,6 +9,7 @@ from node import KNode
 import pytz
 from datetime import datetime
 from tzlocal import get_localzone
+import time
 
 
 DEBUG = False
@@ -319,7 +320,19 @@ class KServer:
 
     async def post_stored_messages(self, writer, username, redirects=None):
 
-        messages = list(filter(lambda x: x[0] == username, self.node.timeline))
+        # msglist = list(filter(lambda x: x[0][0] == username, self.node.timeline))
+        messages= []
+
+        # for message in msglist:
+        #     messages.append(message[0])
+
+
+        for tup in self.node.timeline:
+            for msglist in tup[0]:
+                for msg in msglist:
+                    if msg[0]==username:
+                        messages.append(msg)
+
 
         if redirects != None:
             nodes_connected = []
@@ -485,11 +498,36 @@ class KServer:
                 if k.username in replace_nodes_connected:
                     hierarchy_replace_nodes.remove(k)
 
-        self.node.timeline += timeline
+        self.node.timeline.append( (timeline, str(datetime.now()).split('.')[0]))
         
         await self.update_user(self.node)
     
         return timeline
+
+    
+    def garbage_collect(self):
+        while True:
+            time.sleep(5)
+            now = datetime.now()
+            if self.node and len(self.node.timeline) > 0:
+                print(self.node.timeline)
+
+                i = 0
+                arraySize = len(self.node.timeline)
+                while i < arraySize:
+                    date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
+                    difference = now - date
+                    if difference.total_seconds() > 5:
+                        del self.node.timeline[i]
+                        arraySize -= 1
+                    else:
+                        i += 1
+                    
+                    # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
+
+            
+
+        return
 
 
     def show_timeline(self, messages):
@@ -500,7 +538,9 @@ class KServer:
         localtz = pytz.timezone(str(get_localzone()))
 
         # convert times tuples and join all messages
+        print('a')
         for username, message in messages:
+            print('c')
             (text, time, pubtz) = message
             time = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
             pub_time = pytz.timezone(pubtz)

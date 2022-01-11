@@ -41,11 +41,13 @@ def main():
     if node == False:
         return
   
+    gc = Thread(target=kserver.garbage_collect)
+    gc.daemon = True  # allows us to kill the process on ctrl+c
+    gc.start()
+    print('yo')
     
     menu.main_menu(kserver)
-    #while True: 
-       
-    
+    #while True:    
         
     
 

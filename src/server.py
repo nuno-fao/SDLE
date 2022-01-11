@@ -517,7 +517,7 @@ class KServer:
                 while i < arraySize:
                     date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
                     difference = now - date
-                    if difference.total_seconds() > 5:
+                    if difference.total_seconds() > constants.MESSAGE_LIFETIME:
                         del self.node.timeline[i]
                         arraySize -= 1
                     else:

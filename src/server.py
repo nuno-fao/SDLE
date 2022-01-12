@@ -10,6 +10,7 @@ import pytz
 from datetime import datetime
 from tzlocal import get_localzone
 import time
+import ntplib
 
 
 DEBUG = False
@@ -162,20 +163,20 @@ class KServer:
             return 
         try:
             reader, writer = await asyncio.open_connection(user.address, user.port)
+            data = {"req_type": constants.FOLLOW_REQUEST ,"following_username": self.node.username}
+            json_data = json.dumps(data) + '\n'
+            writer.write(json_data.encode())
+            
+            await writer.drain()
+
+            writer.close()       
+            await writer.wait_closed()
+
         except Exception as e:
             user.online = False
             await self.update_user(user)
             print(f"\nCould not connect to {username}!\n")
             return
-
-        data = {"req_type": constants.FOLLOW_REQUEST ,"following_username": self.node.username}
-        json_data = json.dumps(data) + '\n'
-        writer.write(json_data.encode())
-        
-        await writer.drain()
-
-        writer.close()       
-        await writer.wait_closed()
 
 
     async def unfollow_user(self, username):      
@@ -196,20 +197,21 @@ class KServer:
             return 
         try:
             reader, writer = await asyncio.open_connection(user.address, user.port)
+
+            data = {"req_type": constants.UNFOLLOW_REQUEST ,"unfollowing_username": self.node.username}
+            json_data = json.dumps(data) + '\n'
+            writer.write(json_data.encode())
+            
+            await writer.drain()
+
+            writer.close()       
+            await writer.wait_closed()
+
         except Exception as e:
             user.online = False
             await self.update_user(user)
             print(f"\nCould not connect to {username}!\n")
             return
-        data = {"req_type": constants.UNFOLLOW_REQUEST ,"unfollowing_username": self.node.username}
-        json_data = json.dumps(data) + '\n'
-        writer.write(json_data.encode())
-        
-        await writer.drain()
-
-        writer.close()       
-        await writer.wait_closed()
-
         
 
     
@@ -410,8 +412,12 @@ class KServer:
             #users_offline = []
             nodes = [await self.get_user_by_username(x) for x in redirects]
             online_nodes = list(filter(lambda x: x.online == True, nodes))
+            users_offline = list(filter(lambda x: x.online == False, nodes))
 
             if online_nodes == []:
+                if users_offline != []:
+                    messages += await self.send_message_to_offline_nodes(users_offline)
+
                 data = {"req_type": constants.POST, "message": messages}
 
                 json_data = json.dumps(data) + '\n'
@@ -425,7 +431,6 @@ class KServer:
                  
                 return
 
-            users_offline = list(filter(lambda x: x.online == False, nodes))
             redirect_users = [x for x in online_nodes[:constants.MAX_CONNECTIONS]]
             rest_redirects = [x.username for x in online_nodes[constants.MAX_CONNECTIONS:]]
             
@@ -510,13 +515,15 @@ class KServer:
 
         following_nodes = list(filter(lambda x: x.online == True, following_nodes))
 
-        if following_nodes == []:
-            return []
         #replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
-
-        #offline_nodes = []
-
         timeline = []
+        #offline_nodes = []
+        if following_nodes == []:
+            if following_nodes_offline != []:
+                timeline += await self.send_message_to_offline_nodes(following_nodes_offline)
+
+            return timeline
+
 
         hierarchy_nodes = following_nodes[constants.MAX_CONNECTIONS:]
         
@@ -626,39 +633,60 @@ class KServer:
                 i = 0
                 arraySize = len(self.node.timeline)
                 while i < arraySize:
+                    arraySize = len(self.node.timeline)
                     date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
                     difference = now - date
                     if difference.total_seconds() > constants.MESSAGE_LIFETIME:
-                        users_deleted.append(self.node.timeline[i][0][0][0])
+                        for x in self.node.timeline[i][0]:
+                            users_deleted.append(x[0])
+                        #users_deleted.append(self.node.timeline[i][0][0][0])
                         del self.node.timeline[i]
                         arraySize -= 1
                     else:
+                        for x in self.node.timeline[i][0]:
+                            if x[0] in users_deleted:
+                                users_deleted = list(filter(lambda y: y != x[0], users_deleted))
                         i += 1
-                
+
+                users_deleted = list(set(users_deleted))
                 nodes = [await self.get_user_by_username(x) for x in users_deleted]
                 
                 for node in nodes:
                     data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
                     try:
                         reader, writer = await asyncio.open_connection(node.address, node.port)
+
+                        json_data = json.dumps(data) + '\n'
+                        writer.write(json_data.encode())
+            
+                        await writer.drain()
+
+                        writer.close()       
+                        await writer.wait_closed()
                     except Exception as e:
                         node.online = False
+                        print(node.followers_with_timeline)
                         node.followers_with_timeline.remove(self.node.username)
                         await self.update_user(node)
                         print(f"\nCould not connect to {node.username}!\n")
                     
-                    json_data = json.dumps(data) + '\n'
-                    writer.write(json_data.encode())
-        
-                    await writer.drain()
-
-                    writer.close()       
-                    await writer.wait_closed()
                 # print(users_deleted)
 
                     
                     # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
-
+    def getNTPDateTime():
+        #return time.time()
+        addr = '0.pool.ntp.org'
+        try:
+            ntpDate = None
+            client = ntplib.NTPClient()
+            response = client.request(addr, version=3)
+            return response.tx_time
+            # ntpDate = time.ctime(response.tx_time)
+            # print(response.tx_time)
+        except Exception as e:
+            print(e)
+        # return datetime.datetime.strptime(ntpDate, "%a %b %d %H:%M:%S %Y") # "%Y-%m-%d %H:%M:%S.%f"
 
     def show_timeline(self, messages):
         print('\n')

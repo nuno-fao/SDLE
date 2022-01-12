@@ -42,9 +42,9 @@ def main():
     if node == False:
         return
   
-    # gc = Thread(target=asyncio.run, args=(kserver.garbage_collect(),))
-    # gc.daemon = True  # allows us to kill the process on ctrl+c
-    # gc.start()
+    gc = Thread(target=asyncio.run, args=(kserver.garbage_collect(),))
+    gc.daemon = True  # allows us to kill the process on ctrl+c
+    gc.start()
 
     synchronize_thread = Thread(target=sync.synchronize, daemon=True)
     synchronize_thread.start()

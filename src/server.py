@@ -237,7 +237,6 @@ class KServer:
             writer.close()
             await writer.wait_closed()
 
-
         elif request["req_type"] == constants.GET:
             redirects = None
             follower_username = request["follower_username"]
@@ -257,6 +256,12 @@ class KServer:
             redirects = request["redirects"]
             await self.post_stored_messages(writer, username, redirects)
 
+        elif request["req_type"] == constants.DELETED_TIMELINE:
+            username = request["username"]
+            self.node.followers_with_timeline.remove(username)
+            await self.update_user(self.node)
+            writer.close()
+            await writer.wait_closed()
     
 
 
@@ -326,19 +331,39 @@ class KServer:
         # for message in msglist:
         #     messages.append(message[0])
 
-
+        #print(username)
         for tup in self.node.timeline:
             for msglist in tup[0]:
-                for msg in msglist:
-                    if msg[0]==username:
-                        messages.append(msg)
+                if msglist[0] == username:
+                #for msg in msglist:
+                    #if msg[0] == username:
+                    messages.append(msglist)
 
 
-        if redirects != None:
+        if redirects != []:
+            offline = True
             nodes_connected = []
-            redirect_users = [await self.get_user_by_username(x) for x in redirects[:constants.MAX_CONNECTIONS]]
+            nodes = [await self.get_user_by_username(x) for x in redirects]
+            online_nodes = list(filter(lambda x: x.online == True, nodes))
+
+            if online_nodes == []:
+                data = {"req_type": constants.POST, "message": messages}
+
+                json_data = json.dumps(data) + '\n'
+              
+                writer.write(json_data.encode())
+
+                await writer.drain()
+
+                writer.close()
+                await writer.wait_closed()
+                 
+                return
+
+            users_offline = list(filter(lambda x: x.online == False, nodes))
+            redirect_users = [x for x in online_nodes[:constants.MAX_CONNECTIONS]]
             
-            rest_redirects = redirects[constants.MAX_CONNECTIONS:]
+            rest_redirects = [x.username for x in online_nodes[constants.MAX_CONNECTIONS:]]
             
             for user in redirect_users:
                 for k in list(rest_redirects):
@@ -352,9 +377,16 @@ class KServer:
                 if redirect_messages != None:
                     messages += redirect_messages
                     nodes_connected += [x for (x, y) in redirect_messages]
+                    offline = False
+                else:
+                    users_offline.append(user)
+            
+            if offline == True:
+                await self.post_stored_messages(writer, username, redirects)
+                return
 
 
-
+        #print(messages)
         data = {"req_type": constants.POST, "message": messages}
 
 
@@ -369,15 +401,33 @@ class KServer:
         await writer.wait_closed()
 
     async def post_message(self, writer, follower_username, username, redirects = None):
-
+        #print(redirects)
         messages = [(self.node.username, msg) for msg in self.node.messages]
 
-        if redirects != None:
+        if redirects != []:
+            offline = True
             nodes_connected = []
-            users_offline = []
-            redirect_users = [await self.get_user_by_username(x) for x in redirects[:constants.MAX_CONNECTIONS]]
-            
-            rest_redirects = redirects[constants.MAX_CONNECTIONS:]
+            #users_offline = []
+            nodes = [await self.get_user_by_username(x) for x in redirects]
+            online_nodes = list(filter(lambda x: x.online == True, nodes))
+
+            if online_nodes == []:
+                data = {"req_type": constants.POST, "message": messages}
+
+                json_data = json.dumps(data) + '\n'
+              
+                writer.write(json_data.encode())
+
+                await writer.drain()
+
+                writer.close()
+                await writer.wait_closed()
+                 
+                return
+
+            users_offline = list(filter(lambda x: x.online == False, nodes))
+            redirect_users = [x for x in online_nodes[:constants.MAX_CONNECTIONS]]
+            rest_redirects = [x.username for x in online_nodes[constants.MAX_CONNECTIONS:]]
             
             for user in redirect_users:
                 for k in list(rest_redirects):
@@ -386,36 +436,42 @@ class KServer:
 
                 data = {"req_type": constants.GET, "redirects": rest_redirects, "follower_username": follower_username, "username": username}
                 json_data = json.dumps(data) + '\n'
-                
                 redirect_messages = await self.send_message_to_node(user, json_data.encode())
                 if redirect_messages != None:
                     messages += redirect_messages
                     nodes_connected += [x for (x, y) in redirect_messages]
+                    offline = False
                 else:
                     users_offline.append(user)
+            
+            if offline == True:
+                await self.post_message(writer, follower_username, username, redirects)
+                return
 
-            replace_nodes = await self.get_followers_online_with_timeline(users_offline)
-            hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
-            replace_nodes_connected = []
+            if users_offline != []:
+                messages += await self.send_message_to_offline_nodes(users_offline)
+            # replace_nodes = await self.get_followers_online_with_timeline(users_offline)
+            # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
+            # replace_nodes_connected = []
 
-            for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
-                redirects = [x.username for x in hierarchy_replace_nodes]
+            # for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
+            #     redirects = [x.username for x in hierarchy_replace_nodes]
 
-                data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": users_offline[replace_nodes.index(replace_node)].username}
-                json_data = json.dumps(data) + '\n'
-                for node in replace_node:
-                    returned_messages = await self.send_message_to_node(node, json_data.encode())
-                    if returned_messages != None:
-                        messages += returned_messages
-                        replace_nodes_connected += [x for (x, y) in returned_messages]
-                        break
+            #     data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": users_offline[replace_nodes.index(replace_node)].username}
+            #     json_data = json.dumps(data) + '\n'
+            #     for node in replace_node:
+            #         returned_messages = await self.send_message_to_node(node, json_data.encode())
+            #         if returned_messages != None:
+            #             messages += returned_messages
+            #             replace_nodes_connected += [x for (x, y) in returned_messages]
+            #             break
 
-                for k in list(hierarchy_replace_nodes):
-                    if k.username in replace_nodes_connected:
-                        hierarchy_replace_nodes.remove(k)
+            #     for k in list(hierarchy_replace_nodes):
+            #         if k.username in replace_nodes_connected:
+            #             hierarchy_replace_nodes.remove(k)
             
 
-
+        #print(messages)
         data = {"req_type": constants.POST, "message": messages}
 
 
@@ -437,6 +493,7 @@ class KServer:
                 follower_node = await self.get_user_by_username(follower_username_with_timeline)
                 if follower_node.online == True:
                     result[following_nodes.index(node)].append(follower_node)
+                    break
 
         return result
 
@@ -444,6 +501,7 @@ class KServer:
     async def get_timeline(self):   
          
         following_nodes = []
+        offline = True
         for user in self.node.following:
             following_nodes.append(await self.get_user_by_username(user))
             
@@ -473,6 +531,7 @@ class KServer:
             if returned_messages != None:
                 timeline += returned_messages
                 nodes_connected += [x for (x, y) in returned_messages]
+                offline = False
             else:
                 following_nodes_offline.append(following_node)
 
@@ -480,42 +539,89 @@ class KServer:
                 if k.username in nodes_connected:
                     hierarchy_nodes.remove(k)
 
-        if timeline == []:
+        if offline == True:
             return await self.get_timeline()
 
-        replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
-        hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
-        replace_nodes_connected = []
+        if following_nodes_offline != []:
+            timeline += await self.send_message_to_offline_nodes(following_nodes_offline)
+        # replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
+        # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
+        # replace_nodes_connected = []
 
-        for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
-            redirects = [x.username for x in hierarchy_replace_nodes]
+        # for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
+        #     redirects = [x.username for x in hierarchy_replace_nodes]
 
-            data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username}
-            json_data = json.dumps(data) + '\n'
-            for node in replace_node:
-                returned_messages = await self.send_message_to_node(node, json_data.encode())
-                if returned_messages != None:
-                    timeline += returned_messages
-                    replace_nodes_connected += [x for (x, y) in returned_messages]
-                    break
+        #     data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username}
+        #     json_data = json.dumps(data) + '\n'
+        #     for node in replace_node:
+        #         returned_messages = await self.send_message_to_node(node, json_data.encode())
+        #         if returned_messages != None:
+        #             timeline += returned_messages
+        #             replace_nodes_connected += [x for (x, y) in returned_messages]
+        #             break
 
-            for k in list(hierarchy_replace_nodes):
-                if k.username in replace_nodes_connected:
-                    hierarchy_replace_nodes.remove(k)
+        #     for k in list(hierarchy_replace_nodes):
+        #         if k.username in replace_nodes_connected:
+        #             hierarchy_replace_nodes.remove(k)
 
-        self.node.timeline.append( (timeline, str(datetime.now()).split('.')[0]))
+        self.node.timeline.append((timeline, str(datetime.now()).split('.')[0]))
         
         await self.update_user(self.node)
     
         return timeline
 
+    async def send_message_to_offline_nodes(self, following_nodes_offline):
+        timeline = []
+
+        replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
+        hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
+        #print(replace_nodes)
+        #print(hierarchy_replace_nodes)
+        offline = True
+        replace_nodes_connected = []
+        if replace_nodes == []:
+            return []
+
+        for x in replace_nodes:
+            if x != []:
+                break
+            elif x == [] and replace_nodes.index(x) == (len(replace_nodes) - 1):
+                return []
+
+        for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
+            redirects = [x[0].username for x in hierarchy_replace_nodes]
+
+            data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username}
+            json_data = json.dumps(data) + '\n'
+            #for node in replace_node:
+            returned_messages = await self.send_message_to_node(replace_node[0], json_data.encode())
+            #print(replace_node[0].username)
+            #print(returned_messages)
+            #print(returned_messages)
+            if returned_messages != None:
+                timeline += returned_messages
+                replace_nodes_connected += [x for (x, y) in returned_messages]
+                offline = False
+                break
+
+
+            for k in list(hierarchy_replace_nodes):
+                if k.username in replace_nodes_connected:
+                    hierarchy_replace_nodes.remove(k)
+        
+        if offline == True:
+            return await self.send_message_to_offline_nodes(following_nodes_offline)
+        
+        return timeline
+
     
-    def garbage_collect(self):
+    async def garbage_collect(self):
         while True:
             time.sleep(5)
             now = datetime.now()
+            users_deleted = []
             if self.node and len(self.node.timeline) > 0:
-                print(self.node.timeline)
+                #print(self.node.timeline)
 
                 i = 0
                 arraySize = len(self.node.timeline)
@@ -523,16 +629,35 @@ class KServer:
                     date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
                     difference = now - date
                     if difference.total_seconds() > constants.MESSAGE_LIFETIME:
+                        users_deleted.append(self.node.timeline[i][0][0][0])
                         del self.node.timeline[i]
                         arraySize -= 1
                     else:
                         i += 1
+                
+                nodes = [await self.get_user_by_username(x) for x in users_deleted]
+                
+                for node in nodes:
+                    data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
+                    try:
+                        reader, writer = await asyncio.open_connection(node.address, node.port)
+                    except Exception as e:
+                        node.online = False
+                        node.followers_with_timeline.remove(self.node.username)
+                        await self.update_user(node)
+                        print(f"\nCould not connect to {node.username}!\n")
+                    
+                    json_data = json.dumps(data) + '\n'
+                    writer.write(json_data.encode())
+        
+                    await writer.drain()
+
+                    writer.close()       
+                    await writer.wait_closed()
+                # print(users_deleted)
+
                     
                     # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
-
-            
-
-        return
 
 
     def show_timeline(self, messages):
@@ -543,9 +668,9 @@ class KServer:
         localtz = pytz.timezone(str(get_localzone()))
 
         # convert times tuples and join all messages
-        print('a')
+        #print('a')
         for username, message in messages:
-            print('c')
+            #print('c')
             (text, time, pubtz) = message
             time = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
             pub_time = pytz.timezone(pubtz)

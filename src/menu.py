@@ -80,7 +80,7 @@ def main_menu(kserver):
 
     if not option.isnumeric():
         print("Input must be a number between 0 and 6!")
-        return None
+        return main_menu(kserver)
 
     option = int(option)
 

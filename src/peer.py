@@ -5,6 +5,7 @@ import menu
 from server import KServer
 import json
 from threading import Thread
+import sync
 
 PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"
@@ -41,9 +42,12 @@ def main():
     if node == False:
         return
   
-    gc = Thread(target=asyncio.run, args=(kserver.garbage_collect(),))
-    gc.daemon = True  # allows us to kill the process on ctrl+c
-    gc.start()
+    # gc = Thread(target=asyncio.run, args=(kserver.garbage_collect(),))
+    # gc.daemon = True  # allows us to kill the process on ctrl+c
+    # gc.start()
+
+    synchronize_thread = Thread(target=sync.synchronize, daemon=True)
+    synchronize_thread.start()
     #print('yo')
     
     menu.main_menu(kserver)

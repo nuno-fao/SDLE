@@ -518,8 +518,11 @@ class KServer:
         #replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         timeline = []
         #offline_nodes = []
+        #print([x.dump() for x in following_nodes])
+        #print([x.dump() for x in following_nodes_offline])
         if following_nodes == []:
             if following_nodes_offline != []:
+                #print("Entrei")
                 timeline += await self.send_message_to_offline_nodes(following_nodes_offline)
 
             return timeline
@@ -674,19 +677,7 @@ class KServer:
 
                     
                     # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
-    def getNTPDateTime():
-        #return time.time()
-        addr = '0.pool.ntp.org'
-        try:
-            ntpDate = None
-            client = ntplib.NTPClient()
-            response = client.request(addr, version=3)
-            return response.tx_time
-            # ntpDate = time.ctime(response.tx_time)
-            # print(response.tx_time)
-        except Exception as e:
-            print(e)
-        # return datetime.datetime.strptime(ntpDate, "%a %b %d %H:%M:%S %Y") # "%Y-%m-%d %H:%M:%S.%f"
+    
 
     def show_timeline(self, messages):
         print('\n')

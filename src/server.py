@@ -247,7 +247,9 @@ class KServer:
                 if follower_username in self.node.followers_with_timeline:
                     self.node.followers_with_timeline.remove(follower_username)
                 self.node.followers_with_timeline.insert(0,follower_username)
-                await self.update_user(self.node)
+                # await self.update_user(self.node)
+                Thread(target=asyncio.run, args=(self.update_user(self.node),)).start()
+                #asyncio.to_thread(self.update_user(self.node))
 
             if "redirects" in request:
                 redirects = request["redirects"]

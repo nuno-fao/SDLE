@@ -1,4 +1,5 @@
 from asyncio.tasks import wait
+from gc import garbage
 import logging
 import asyncio
 import json
@@ -7,8 +8,9 @@ from threading import Thread
 from kademlia.network import Server
 from node import KNode
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 from tzlocal import get_localzone
+from sched import scheduler
 import time
 import ntplib
 
@@ -55,17 +57,18 @@ class KServer:
                     "following": [],
                     "address": self.address,
                     "port": self.port,
-                    "messages":[],
                     "username": username,
                     "online": True,
                     "timeline": [],
-                    "followers_with_timeline":[]
+                    "followers_with_timeline":[],
+                    "followers_timestamp": {}
                 }
 
             value_json = json.dumps(value)
             await self.server.set(username, value_json)
 
             self.node = KNode(value)
+            self.node.save_messages()
             Thread(target=self.listen, daemon=True).start()
             return self.node
         
@@ -83,16 +86,17 @@ class KServer:
                     "following": user["following"], 
                     "address": self.address, 
                     "port": self.port, 
-                    "messages":[],
                     "username": username,
                     "online": True,
                     "timeline": user["timeline"],
-                    "followers_with_timeline": user["followers_with_timeline"]
+                    "followers_with_timeline": user["followers_with_timeline"],
+                    "followers_timestamp": user["followers_timestamp"]
                 }
             value_json = json.dumps(value)
             await self.server.set(username, value_json)
 
             self.node = KNode(value)
+            self.node.load_messages()
             Thread(target=self.listen, daemon=True).start()
             return self.node
 
@@ -116,15 +120,17 @@ class KServer:
 
         user = json.loads(user)
         
-        value = {"followers": user["followers"], 
+        value = {
+                "username": user["username"],
+                "followers": user["followers"], 
                 "following": user["following"], 
                 "address": user["address"], 
                 "port": user["port"], 
-                "messages": user["messages"],
                 "username": username,
                 "online": user["online"],
                 "timeline": user["timeline"],
-                "followers_with_timeline": user["followers_with_timeline"]
+                "followers_with_timeline": user["followers_with_timeline"],
+                "followers_timestamp": user["followers_timestamp"]
             }
 
         node = KNode(value)
@@ -158,6 +164,7 @@ class KServer:
         self.node.following.append(username)
         await self.update_user(self.node)
         user.followers.append(self.node.username)
+        user.followers_timestamp[self.node.username] = str(datetime.now()).split('.')[0]
         await self.update_user(user)
         if user.online == False:
             return 
@@ -192,6 +199,7 @@ class KServer:
         self.node.following.remove(user.username)
         await self.update_user(self.node)    
         user.followers.remove(self.node.username)
+        del user.followers_timestamp[self.node.username]
         await self.update_user(user)  
         if user.online == False:
             return 
@@ -258,7 +266,8 @@ class KServer:
         elif request["req_type"] == constants.GET_STORED_TIMELINE:
             username = request["username"]
             redirects = request["redirects"]
-            await self.post_stored_messages(writer, username, redirects)
+            follower_username = request["follower_username"]
+            await self.post_stored_messages(writer, username, follower_username, redirects)
 
         elif request["req_type"] == constants.DELETED_TIMELINE:
             username = request["username"]
@@ -325,24 +334,30 @@ class KServer:
 
     async def save_message(self, message):
         self.node.messages.append((message,str(datetime.now()).split('.')[0],str(get_localzone())))
+        self.node.save_messages()
 
 
-    async def post_stored_messages(self, writer, username, redirects=None):
+    async def post_stored_messages(self, writer, username, follower_username, redirects=None):
 
         # msglist = list(filter(lambda x: x[0][0] == username, self.node.timeline))
         messages= []
-
+        offline_node = await self.get_user_by_username(username)
         # for message in msglist:
         #     messages.append(message[0])
-
         #print(username)
+        timestamp = None
+
         for tup in self.node.timeline:
             for msglist in tup[0]:
                 if msglist[0] == username:
                 #for msg in msglist:
                     #if msg[0] == username:
+                    if timestamp == None:
+                        timestamp = datetime.strftime(datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') + timedelta(seconds=1), '%Y-%m-%d %H:%M:%S')
+                        print(timestamp)
+                    elif (datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') - datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')).total_seconds() > 0:
+                        timestamp = datetime.strftime(datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') + timedelta(seconds=1), '%Y-%m-%d %H:%M:%S')
                     messages.append(msglist)
-
 
         if redirects != []:
             offline = True
@@ -361,6 +376,12 @@ class KServer:
 
                 writer.close()
                 await writer.wait_closed()
+
+                if timestamp == None:
+                    offline_node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+                else:
+                    offline_node.followers_timestamp[follower_username] = timestamp
+                await self.update_user(offline_node)
                  
                 return
 
@@ -374,7 +395,7 @@ class KServer:
                     if k in nodes_connected:
                         rest_redirects.remove(k)
 
-                data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": rest_redirects, "username": username}
+                data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": rest_redirects, "username": username, "follower_username": follower_username}
                 json_data = json.dumps(data) + '\n'
                 
                 redirect_messages = await self.send_message_to_node(user, json_data.encode())
@@ -386,7 +407,7 @@ class KServer:
                     users_offline.append(user)
             
             if offline == True:
-                await self.post_stored_messages(writer, username, redirects)
+                await self.post_stored_messages(writer, username, follower_username, redirects)
                 return
 
 
@@ -404,10 +425,22 @@ class KServer:
         writer.close()
         await writer.wait_closed()
 
+        if timestamp == None:
+            offline_node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+        else:
+            offline_node.followers_timestamp[follower_username] = timestamp
+        await self.update_user(offline_node)
+
     async def post_message(self, writer, follower_username, username, redirects = None):
         #print(redirects)
-        messages = [(self.node.username, msg) for msg in self.node.messages]
-
+        #print("entrei no post")
+        messages = [(self.node.username, msg) for msg in self.node.messages if (datetime.strptime(msg[1], '%Y-%m-%d %H:%M:%S') - datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S')).total_seconds() >= 0]
+        # for msg in self.node.messages:
+        #     print(msg)
+        #     print(datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S'))
+        #     print((datetime.strptime(msg[1], '%Y-%m-%d %H:%M:%S') - datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S')).total_seconds())
+        # #messages = []
+        #print(messages)
         if redirects != []:
             offline = True
             nodes_connected = []
@@ -418,7 +451,7 @@ class KServer:
 
             if online_nodes == []:
                 if users_offline != []:
-                    messages += await self.send_message_to_offline_nodes(users_offline)
+                    messages += await self.send_message_to_offline_nodes(users_offline, follower_username)
 
                 data = {"req_type": constants.POST, "message": messages}
 
@@ -430,6 +463,9 @@ class KServer:
 
                 writer.close()
                 await writer.wait_closed()
+
+                self.node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+                await self.update_user(self.node)
                  
                 return
 
@@ -456,7 +492,7 @@ class KServer:
                 return
 
             if users_offline != []:
-                messages += await self.send_message_to_offline_nodes(users_offline)
+                messages += await self.send_message_to_offline_nodes(users_offline, follower_username)
             # replace_nodes = await self.get_followers_online_with_timeline(users_offline)
             # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
             # replace_nodes_connected = []
@@ -492,6 +528,9 @@ class KServer:
         writer.close()
         await writer.wait_closed()
 
+        self.node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+        await self.update_user(self.node)
+
     async def get_followers_online_with_timeline(self, following_nodes):
         result = []
         for node in following_nodes:
@@ -506,6 +545,12 @@ class KServer:
 
 
     async def get_timeline(self):   
+
+        # if tries == 5: return []
+
+        # elif tries > 0:
+        #     future = asyncio.run_coroutine_threadsafe(self.get_timeline(tries+1), self.loop)
+        #     return future.result()
          
         following_nodes = []
         offline = True
@@ -519,13 +564,14 @@ class KServer:
 
         #replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         timeline = []
+        #print(following_nodes)
         #offline_nodes = []
         #print([x.dump() for x in following_nodes])
         #print([x.dump() for x in following_nodes_offline])
         if following_nodes == []:
             if following_nodes_offline != []:
                 #print("Entrei")
-                timeline += await self.send_message_to_offline_nodes(following_nodes_offline)
+                timeline += await self.send_message_to_offline_nodes(following_nodes_offline, self.node.username)
 
             return timeline
 
@@ -535,6 +581,7 @@ class KServer:
 
         nodes_connected = []
         for following_node in following_nodes[:constants.MAX_CONNECTIONS]:
+            #print(following_node.followers_timestamp)
             redirects = [x.username for x in hierarchy_nodes]
 
             data = {"req_type": constants.GET, "redirects": redirects, "follower_username": self.node.username, "username": following_node.username}
@@ -555,7 +602,7 @@ class KServer:
             return await self.get_timeline()
 
         if following_nodes_offline != []:
-            timeline += await self.send_message_to_offline_nodes(following_nodes_offline)
+            timeline += await self.send_message_to_offline_nodes(following_nodes_offline, self.node.username)
         # replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
         # replace_nodes_connected = []
@@ -582,7 +629,7 @@ class KServer:
     
         return timeline
 
-    async def send_message_to_offline_nodes(self, following_nodes_offline):
+    async def send_message_to_offline_nodes(self, following_nodes_offline, follower_username):
         timeline = []
 
         replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
@@ -603,7 +650,7 @@ class KServer:
         for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
             redirects = [x[0].username for x in hierarchy_replace_nodes]
 
-            data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username}
+            data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username, "follower_username": follower_username}
             json_data = json.dumps(data) + '\n'
             #for node in replace_node:
             returned_messages = await self.send_message_to_node(replace_node[0], json_data.encode())
@@ -622,67 +669,75 @@ class KServer:
                     hierarchy_replace_nodes.remove(k)
         
         if offline == True:
-            return await self.send_message_to_offline_nodes(following_nodes_offline)
+            return await self.send_message_to_offline_nodes(following_nodes_offline, follower_username)
         
         return timeline
 
     
     async def garbage_collect(self):
-        while True:
-            time.sleep(5)
-            now = datetime.now()
-            users_deleted = []
-            if self.node and len(self.node.timeline) > 0:
-                #print(self.node.timeline)
+        #while True:
+        #time.sleep(5)
+        now = datetime.now()
+        users_deleted = []
+        if self.node and len(self.node.timeline) > 0:
+            #print(self.node.timeline)
 
-                i = 0
+            i = 0
+            arraySize = len(self.node.timeline)
+            while i < arraySize:
                 arraySize = len(self.node.timeline)
-                while i < arraySize:
-                    arraySize = len(self.node.timeline)
-                    date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
-                    difference = now - date
-                    if difference.total_seconds() > constants.MESSAGE_LIFETIME:
-                        for x in self.node.timeline[i][0]:
-                            users_deleted.append(x[0])
-                        #users_deleted.append(self.node.timeline[i][0][0][0])
-                        del self.node.timeline[i]
-                        arraySize -= 1
-                    else:
-                        for x in self.node.timeline[i][0]:
-                            if x[0] in users_deleted:
-                                users_deleted = list(filter(lambda y: y != x[0], users_deleted))
-                        i += 1
+                date = datetime.strptime(self.node.timeline[i][1],'%Y-%m-%d %H:%M:%S')
+                difference = now - date
+                if difference.total_seconds() > constants.MESSAGE_LIFETIME:
+                    for x in self.node.timeline[i][0]:
+                        users_deleted.append(x[0])
+                    #users_deleted.append(self.node.timeline[i][0][0][0])
+                    del self.node.timeline[i]
+                    arraySize -= 1
+                else:
+                    for x in self.node.timeline[i][0]:
+                        if x[0] in users_deleted:
+                            users_deleted = list(filter(lambda y: y != x[0], users_deleted))
+                    i += 1
 
-                users_deleted = list(set(users_deleted))
-                nodes = [await self.get_user_by_username(x) for x in users_deleted]
-                
-                for node in nodes:
-                    data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
-                    try:
-                        reader, writer = await asyncio.open_connection(node.address, node.port)
-
-                        json_data = json.dumps(data) + '\n'
-                        writer.write(json_data.encode())
+            users_deleted = list(set(users_deleted))
+            nodes = [await self.get_user_by_username(x) for x in users_deleted]
             
-                        await writer.drain()
+            for node in nodes:
+                data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
+                try:
+                    reader, writer = await asyncio.open_connection(node.address, node.port)
 
-                        writer.close()       
-                        await writer.wait_closed()
-                    except Exception as e:
-                        node.online = False
-                        print(node.followers_with_timeline)
+                    json_data = json.dumps(data) + '\n'
+                    writer.write(json_data.encode())
+        
+                    await writer.drain()
+
+                    writer.close()       
+                    await writer.wait_closed()
+                except Exception:
+                    node.online = False
+                    if self.node.username in node.followers_with_timeline:
                         node.followers_with_timeline.remove(self.node.username)
                         await self.update_user(node)
-                        print(f"\nCould not connect to {node.username}!\n")
+                    print(f"\nCould not connect to {node.username}!\n")
                     
                 # print(users_deleted)
 
                     
                     # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
-    
+    def run_garbage_collector(self, scheduler):
+        future = asyncio.run_coroutine_threadsafe(self.garbage_collect(), self.loop)
+        value = future.result()
+        scheduler.enter(10,200, self.run_garbage_collector, (scheduler,))
+        
 
     def show_timeline(self, messages):
         print('\n')
+
+        if messages == []:
+            print('There are no messages to show!\n')
+            return
 
         timeline = []
         
@@ -702,7 +757,7 @@ class KServer:
         #sort list
         timeline.sort(key=lambda tup: tup[2])  
 
-        for message in timeline:
+        for message in reversed(timeline):
             print( message[0] + " posted: \t" + message[1] + "\t" + str(message[2]) + "\n\n")
 
         

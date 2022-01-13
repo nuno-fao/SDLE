@@ -72,8 +72,9 @@ def main_menu(kserver):
     print("[2] Unfollow user")
     print("[3] Show followers")
     print("[4] Show following")
-    print("[5] Post message")
-    print("[6] Timeline")
+    print("[5] Show messages")
+    print("[6] Post message")
+    print("[7] Timeline")
     print("[0] Exit")
 
     option = input("option > ")
@@ -118,14 +119,18 @@ def main_menu(kserver):
         kserver.node.show_following()
         main_menu(kserver)
 
-
     elif option == 5:
+        print(kserver.node.messages)
+        main_menu(kserver)
+
+
+    elif option == 6:
         message = input("Message: ")
         future = asyncio.run_coroutine_threadsafe(kserver.save_message(message), loop)
         future.result()
         main_menu(kserver)
     
-    elif option == 6:
+    elif option == 7:
         future = asyncio.run_coroutine_threadsafe(kserver.get_timeline(), loop)
         kserver.show_timeline(future.result())
         main_menu(kserver)

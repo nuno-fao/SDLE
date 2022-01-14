@@ -691,20 +691,26 @@ class KServer:
                 if difference.total_seconds() > constants.MESSAGE_LIFETIME:
                     for x in self.node.timeline[i][0]:
                         users_deleted.append(x[0])
-                    #users_deleted.append(self.node.timeline[i][0][0][0])
                     del self.node.timeline[i]
                     arraySize -= 1
                 else:
-                    for x in self.node.timeline[i][0]:
-                        if x[0] in users_deleted:
-                            users_deleted = list(filter(lambda y: y != x[0], users_deleted))
+                    for x in self.node.timeline:
+                        for z in x:
+                            if z[0][0] in users_deleted:
+                                users_deleted = list(filter(lambda y: y != z[0][0], users_deleted))
                     i += 1
-
+                    
             users_deleted = list(set(users_deleted))
             nodes = [await self.get_user_by_username(x) for x in users_deleted]
+
+            data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
             
             for node in nodes:
-                data = {"req_type": constants.DELETED_TIMELINE, "username": self.node.username}
+                if node.online == False and self.node.username in node.followers_with_timeline:
+                    node.followers_with_timeline.remove(self.node.username)
+                    await self.update_user(node)
+                    continue
+
                 try:
                     reader, writer = await asyncio.open_connection(node.address, node.port)
 

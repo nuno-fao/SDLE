@@ -2,13 +2,18 @@ import asyncio
 import sys
 import node
 import menu
-from server import KServer
+from server import KServer, scheduler, time
 import json
 from threading import Thread
+import sync
 
 PORT_FLAG = "-p"
 BOOTSTRAP_FLAG = "-b"
 
+def start_garbage_collector(kserver):
+    scheduler_aux = scheduler(time.time, time.sleep)
+    scheduler_aux.enter(1, 200, kserver.run_garbage_collector, (scheduler_aux,))
+    scheduler_aux.run()
 
 
 def main():
@@ -41,11 +46,16 @@ def main():
     if node == False:
         return
   
+    gc = Thread(target=start_garbage_collector, args=(kserver,))
+    gc.daemon = True  # allows us to kill the process on ctrl+c
+    gc.start()
+
+    synchronize_thread = Thread(target=sync.synchronize, daemon=True)
+    synchronize_thread.start()
+    #print('yo')
     
     menu.main_menu(kserver)
-    #while True: 
-       
-    
+    #while True:    
         
     
 

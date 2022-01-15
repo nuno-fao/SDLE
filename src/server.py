@@ -251,16 +251,14 @@ class KServer:
             redirects = None
             follower_username = request["follower_username"]
             username = request["username"]
+            redirects = request["redirects"]
             if username == self.node.username:
                 if follower_username in self.node.followers_with_timeline:
                     self.node.followers_with_timeline.remove(follower_username)
                 self.node.followers_with_timeline.insert(0,follower_username)
-                # await self.update_user(self.node)
-                Thread(target=asyncio.run, args=(self.update_user(self.node),)).start()
-                #asyncio.to_thread(self.update_user(self.node))
 
-            if "redirects" in request:
-                redirects = request["redirects"]
+                Thread(target=asyncio.run, args=(self.update_user(self.node),)).start()
+
             await self.post_message(writer, follower_username, username, redirects)
         
         elif request["req_type"] == constants.GET_STORED_TIMELINE:
@@ -322,7 +320,7 @@ class KServer:
             
             
             if request["req_type"] == constants.POST:
-                #print("Mensagem recebida: ", request["message"])
+                print("Recebi o POST")
                 return request["message"]
 
 
@@ -337,27 +335,42 @@ class KServer:
         self.node.save_messages()
 
 
-    async def post_stored_messages(self, writer, username, follower_username, redirects=None):
+    async def post_stored_messages(self, writer, username, follower_username, redirects, tries=0):
 
-        # msglist = list(filter(lambda x: x[0][0] == username, self.node.timeline))
+
         messages= []
         offline_node = await self.get_user_by_username(username)
-        # for message in msglist:
-        #     messages.append(message[0])
-        #print(username)
+
         timestamp = None
 
         for tup in self.node.timeline:
             for msglist in tup[0]:
                 if msglist[0] == username:
-                #for msg in msglist:
-                    #if msg[0] == username:
                     if timestamp == None:
                         timestamp = datetime.strftime(datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') + timedelta(seconds=1), '%Y-%m-%d %H:%M:%S')
-                        print(timestamp)
                     elif (datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') - datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')).total_seconds() > 0:
                         timestamp = datetime.strftime(datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') + timedelta(seconds=1), '%Y-%m-%d %H:%M:%S')
                     messages.append(msglist)
+
+        if tries == constants.MAX_TRIES:
+            data = {"req_type": constants.POST, "message": messages}
+
+            json_data = json.dumps(data) + '\n'
+            
+            writer.write(json_data.encode())
+
+            await writer.drain()
+
+            writer.close()
+            await writer.wait_closed()
+
+            if timestamp == None:
+                offline_node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+            else:
+                offline_node.followers_timestamp[follower_username] = timestamp
+            await self.update_user(offline_node)
+                
+            return
 
         if redirects != []:
             offline = True
@@ -407,11 +420,10 @@ class KServer:
                     users_offline.append(user)
             
             if offline == True:
-                await self.post_stored_messages(writer, username, follower_username, redirects)
+                await self.post_stored_messages(writer, username, follower_username, redirects, tries+1)
                 return
 
 
-        #print(messages)
         data = {"req_type": constants.POST, "message": messages}
 
 
@@ -431,20 +443,31 @@ class KServer:
             offline_node.followers_timestamp[follower_username] = timestamp
         await self.update_user(offline_node)
 
-    async def post_message(self, writer, follower_username, username, redirects = None):
-        #print(redirects)
-        #print("entrei no post")
+
+    async def post_message(self, writer, follower_username, username, redirects, tries = 0):
+
         messages = [(self.node.username, msg) for msg in self.node.messages if (datetime.strptime(msg[1], '%Y-%m-%d %H:%M:%S') - datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S')).total_seconds() >= 0]
-        # for msg in self.node.messages:
-        #     print(msg)
-        #     print(datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S'))
-        #     print((datetime.strptime(msg[1], '%Y-%m-%d %H:%M:%S') - datetime.strptime(self.node.followers_timestamp[follower_username], '%Y-%m-%d %H:%M:%S')).total_seconds())
-        # #messages = []
-        #print(messages)
+
+        if tries == constants.MAX_TRIES:
+            data = {"req_type": constants.POST, "message": messages}
+
+            json_data = json.dumps(data) + '\n'
+            
+            writer.write(json_data.encode())
+
+            await writer.drain()
+
+            writer.close()
+            await writer.wait_closed()
+
+            self.node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
+            await self.update_user(self.node)
+
+            return
+
         if redirects != []:
             offline = True
             nodes_connected = []
-            #users_offline = []
             nodes = [await self.get_user_by_username(x) for x in redirects]
             online_nodes = list(filter(lambda x: x.online == True, nodes))
             users_offline = list(filter(lambda x: x.online == False, nodes))
@@ -488,33 +511,12 @@ class KServer:
                     users_offline.append(user)
             
             if offline == True:
-                await self.post_message(writer, follower_username, username, redirects)
+                await self.post_message(writer, follower_username, username, redirects, tries+1)
                 return
 
             if users_offline != []:
                 messages += await self.send_message_to_offline_nodes(users_offline, follower_username)
-            # replace_nodes = await self.get_followers_online_with_timeline(users_offline)
-            # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
-            # replace_nodes_connected = []
 
-            # for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
-            #     redirects = [x.username for x in hierarchy_replace_nodes]
-
-            #     data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": users_offline[replace_nodes.index(replace_node)].username}
-            #     json_data = json.dumps(data) + '\n'
-            #     for node in replace_node:
-            #         returned_messages = await self.send_message_to_node(node, json_data.encode())
-            #         if returned_messages != None:
-            #             messages += returned_messages
-            #             replace_nodes_connected += [x for (x, y) in returned_messages]
-            #             break
-
-            #     for k in list(hierarchy_replace_nodes):
-            #         if k.username in replace_nodes_connected:
-            #             hierarchy_replace_nodes.remove(k)
-            
-
-        #print(messages)
         data = {"req_type": constants.POST, "message": messages}
 
 
@@ -531,6 +533,7 @@ class KServer:
         self.node.followers_timestamp[follower_username] = str(datetime.now()).split('.')[0]
         await self.update_user(self.node)
 
+
     async def get_followers_online_with_timeline(self, following_nodes):
         result = []
         for node in following_nodes:
@@ -544,14 +547,10 @@ class KServer:
         return result
 
 
-    async def get_timeline(self):   
+    async def get_timeline(self, tries=0):   
 
-        # if tries == 5: return []
-
-        # elif tries > 0:
-        #     future = asyncio.run_coroutine_threadsafe(self.get_timeline(tries+1), self.loop)
-        #     return future.result()
-         
+        if tries == constants.MAX_TRIES: return []
+               
         following_nodes = []
         offline = True
         for user in self.node.following:
@@ -562,28 +561,20 @@ class KServer:
 
         following_nodes = list(filter(lambda x: x.online == True, following_nodes))
 
-        #replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         timeline = []
-        #print(following_nodes)
-        #offline_nodes = []
-        #print([x.dump() for x in following_nodes])
-        #print([x.dump() for x in following_nodes_offline])
+
         if following_nodes == []:
             if following_nodes_offline != []:
-                #print("Entrei")
                 timeline += await self.send_message_to_offline_nodes(following_nodes_offline, self.node.username)
 
             return timeline
 
 
         hierarchy_nodes = following_nodes[constants.MAX_CONNECTIONS:]
-        
 
         nodes_connected = []
         for following_node in following_nodes[:constants.MAX_CONNECTIONS]:
-            #print(following_node.followers_timestamp)
             redirects = [x.username for x in hierarchy_nodes]
-
             data = {"req_type": constants.GET, "redirects": redirects, "follower_username": self.node.username, "username": following_node.username}
             json_data = json.dumps(data) + '\n'
             returned_messages = await self.send_message_to_node(following_node, json_data.encode())
@@ -599,29 +590,10 @@ class KServer:
                     hierarchy_nodes.remove(k)
 
         if offline == True:
-            return await self.get_timeline()
+            return await self.get_timeline(tries+1)
 
         if following_nodes_offline != []:
             timeline += await self.send_message_to_offline_nodes(following_nodes_offline, self.node.username)
-        # replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
-        # hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
-        # replace_nodes_connected = []
-
-        # for replace_node in replace_nodes[:constants.MAX_CONNECTIONS]:
-        #     redirects = [x.username for x in hierarchy_replace_nodes]
-
-        #     data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username}
-        #     json_data = json.dumps(data) + '\n'
-        #     for node in replace_node:
-        #         returned_messages = await self.send_message_to_node(node, json_data.encode())
-        #         if returned_messages != None:
-        #             timeline += returned_messages
-        #             replace_nodes_connected += [x for (x, y) in returned_messages]
-        #             break
-
-        #     for k in list(hierarchy_replace_nodes):
-        #         if k.username in replace_nodes_connected:
-        #             hierarchy_replace_nodes.remove(k)
 
         self.node.timeline.append((timeline, str(datetime.now()).split('.')[0]))
         
@@ -629,13 +601,16 @@ class KServer:
     
         return timeline
 
-    async def send_message_to_offline_nodes(self, following_nodes_offline, follower_username):
+
+
+    async def send_message_to_offline_nodes(self, following_nodes_offline, follower_username, tries=0):
         timeline = []
+
+        if tries == constants.MAX_TRIES: return []
 
         replace_nodes = await self.get_followers_online_with_timeline(following_nodes_offline)
         hierarchy_replace_nodes = replace_nodes[constants.MAX_CONNECTIONS:]
-        #print(replace_nodes)
-        #print(hierarchy_replace_nodes)
+
         offline = True
         replace_nodes_connected = []
         if replace_nodes == []:
@@ -652,11 +627,10 @@ class KServer:
 
             data = {"req_type": constants.GET_STORED_TIMELINE, "redirects": redirects, "username": following_nodes_offline[replace_nodes.index(replace_node)].username, "follower_username": follower_username}
             json_data = json.dumps(data) + '\n'
-            #for node in replace_node:
-            returned_messages = await self.send_message_to_node(replace_node[0], json_data.encode())
-            #print(replace_node[0].username)
-            #print(returned_messages)
-            #print(returned_messages)
+            returned_messages = None
+            if replace_node != []:
+                returned_messages = await self.send_message_to_node(replace_node[0], json_data.encode())
+
             if returned_messages != None:
                 timeline += returned_messages
                 replace_nodes_connected += [x for (x, y) in returned_messages]
@@ -669,7 +643,7 @@ class KServer:
                     hierarchy_replace_nodes.remove(k)
         
         if offline == True:
-            return await self.send_message_to_offline_nodes(following_nodes_offline, follower_username)
+            return await self.send_message_to_offline_nodes(following_nodes_offline, follower_username, tries+1)
         
         return timeline
 

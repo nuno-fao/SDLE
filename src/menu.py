@@ -96,6 +96,7 @@ def main_menu(kserver):
 
             future = asyncio.run_coroutine_threadsafe(kserver.follow_user(username), loop)
             future.result()
+            print('\n')
             main_menu(kserver)
         
         except Exception as e:
@@ -106,21 +107,28 @@ def main_menu(kserver):
             username = input("Username: ")
             future = asyncio.run_coroutine_threadsafe(kserver.unfollow_user(username), loop)
             future.result()
+            print('\n')
             main_menu(kserver)
         
         except Exception as e:
             print(e)
 
     elif option == 3:
+        print('\n')
         kserver.node.show_followers()
+        print('\n')
         main_menu(kserver)
 
     elif option == 4:
+        print('\n')
         kserver.node.show_following()
+        print('\n')
         main_menu(kserver)
 
     elif option == 5:
+        print('\n')
         print(kserver.node.messages)
+        print('\n')
         main_menu(kserver)
 
 

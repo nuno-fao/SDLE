@@ -52,10 +52,8 @@ def main():
 
     synchronize_thread = Thread(target=sync.synchronize, daemon=True)
     synchronize_thread.start()
-    #print('yo')
     
-    menu.main_menu(kserver)
-    #while True:    
+    menu.main_menu(kserver)   
         
     
 

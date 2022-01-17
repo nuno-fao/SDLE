@@ -53,8 +53,4 @@ class KNode:
         data = json.load(f)
 
         self.messages = data["messages"]
-        # sequence_number = data["sequence_numbers"]
-        # clients_idx=data["clients"]
-        # for msg in data["messages"]:
-        #     self.messages.append((x,y,z))
         

@@ -234,13 +234,11 @@ class KServer:
             messages = self.node.messages
             self.node = await self.get_user_by_username(self.node.username)
             self.node.messages = messages
-            #await self.update_follower(request)
 
             writer.close()
             await writer.wait_closed()
 
         if request["req_type"] == constants.UNFOLLOW_REQUEST:
-            #await self.update_unfollower(request)
             messages = self.node.messages
             self.node = await self.get_user_by_username(self.node.username)
             self.node.messages = messages
@@ -269,8 +267,9 @@ class KServer:
 
         elif request["req_type"] == constants.DELETED_TIMELINE:
             username = request["username"]
-            self.node.followers_with_timeline.remove(username)
-            await self.update_user(self.node)
+            if username in self.node.followers_with_timeline:
+                self.node.followers_with_timeline.remove(username)
+                await self.update_user(self.node)
             writer.close()
             await writer.wait_closed()
     
@@ -320,7 +319,6 @@ class KServer:
             
             
             if request["req_type"] == constants.POST:
-                print("Recebi o POST")
                 return request["message"]
 
 
@@ -340,12 +338,13 @@ class KServer:
 
         messages= []
         offline_node = await self.get_user_by_username(username)
+        last_timestamp = offline_node.followers_timestamp[follower_username]
 
         timestamp = None
 
         for tup in self.node.timeline:
             for msglist in tup[0]:
-                if msglist[0] == username:
+                if msglist[0] == username and (datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') - datetime.strptime(last_timestamp,'%Y-%m-%d %H:%M:%S')).total_seconds() > 0:
                     if timestamp == None:
                         timestamp = datetime.strftime(datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') + timedelta(seconds=1), '%Y-%m-%d %H:%M:%S')
                     elif (datetime.strptime(msglist[1][1],'%Y-%m-%d %H:%M:%S') - datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')).total_seconds() > 0:
@@ -649,13 +648,9 @@ class KServer:
 
     
     async def garbage_collect(self):
-        #while True:
-        #time.sleep(5)
         now = datetime.now()
         users_deleted = []
         if self.node and len(self.node.timeline) > 0:
-            #print(self.node.timeline)
-
             i = 0
             arraySize = len(self.node.timeline)
             while i < arraySize:
@@ -670,7 +665,7 @@ class KServer:
                 else:
                     for x in self.node.timeline:
                         for z in x:
-                            if z[0][0] in users_deleted:
+                            if z != [] and z[0] != [] and z[0][0] in users_deleted:
                                 users_deleted = list(filter(lambda y: y != z[0][0], users_deleted))
                     i += 1
                     
@@ -702,10 +697,7 @@ class KServer:
                         await self.update_user(node)
                     print(f"\nCould not connect to {node.username}!\n")
                     
-                # print(users_deleted)
 
-                    
-                    # dar update no server e informar os nós que são apagados (dentro do if onde se dá delete)
     def run_garbage_collector(self, scheduler):
         future = asyncio.run_coroutine_threadsafe(self.garbage_collect(), self.loop)
         value = future.result()
@@ -724,9 +716,7 @@ class KServer:
         localtz = pytz.timezone(str(get_localzone()))
 
         # convert times tuples and join all messages
-        #print('a')
         for username, message in messages:
-            #print('c')
             (text, time, pubtz) = message
             time = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
             pub_time = pytz.timezone(pubtz)

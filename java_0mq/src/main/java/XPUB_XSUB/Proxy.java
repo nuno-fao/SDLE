@@ -47,7 +47,7 @@ public class Proxy
                         more = xsub.hasReceiveMore();
 
                         // Broker it
-                        xpub.send(message, more ? ZMQ.SNDMORE : 0);
+                        System.out.println(xpub.send(message, more ? ZMQ.SNDMORE : 0));
                         if (!more) {
                             break;
                         }
@@ -61,7 +61,7 @@ public class Proxy
                         System.out.println("Received xPub message: " + new String(message, ZMQ.CHARSET));
                         more = xpub.hasReceiveMore();
                         // Broker it
-                        xsub.send(message, more ? ZMQ.SNDMORE : 0);
+                        System.out.println(xsub.send(message, more ? ZMQ.SNDMORE : 0));
                         if (!more) {
                             break;
                         }

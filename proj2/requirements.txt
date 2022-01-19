@@ -1,0 +1,4 @@
+ntplib==0.4.0
+pytz==2021.3
+rpcudp==4.0.2
+tzlocal==4.1
